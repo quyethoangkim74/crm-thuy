@@ -28,7 +28,6 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4Y3hmdGl2bW1nd2FrY3hybm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyODIxNzUsImV4cCI6MjEwMTg1ODE3NX0.nCw8bgYSHE3Q49iGiqK6SuEjcYg5xs22Oa-2-EXqNnw';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // MÃ PIN ĐĂNG NHẬP
     const CORRECT_PIN = '1234';
 
     function App() {
@@ -44,19 +43,21 @@
       const [bankLogs, setBankLogs] = useState([]);
       const [loading, setLoading] = useState(false);
       
-      // Control Modals
       const [showTxModal, setShowTxModal] = useState(false);
       const [showPkgModal, setShowPkgModal] = useState(false);
       const [showBankModal, setShowBankModal] = useState(false);
       const [showReportModal, setShowReportModal] = useState(false);
 
-      // Forms
+      // Sửa state cho Edit
+      const [editingTx, setEditingTx] = useState(null);
+      const [editingPkg, setEditingPkg] = useState(null);
+
       const [txForm, setTxForm] = useState({
         type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0]
       });
 
       const [pkgForm, setPkgForm] = useState({
-        name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '', description: ''
+        name: '', service: 'SIM', months: 12, bonusMonths: 0, price: ''
       });
 
       const [bankForm, setBankForm] = useState({
@@ -76,16 +77,20 @@
 
       const loadData = async () => {
         setLoading(true);
-        const { data: txsData } = await supabase.from('transactions').select('*').order('id', { ascending: false });
-        if (txsData) setTxs(txsData);
+        try {
+          const { data: txsData } = await supabase.from('transactions').select('*').order('id', { ascending: false });
+          if (txsData) setTxs(txsData);
 
-        const { data: pkgsData } = await supabase.from('packages').select('*').order('id', { ascending: false });
-        if (pkgsData) setPkgs(pkgsData);
+          const { data: pkgsData } = await supabase.from('packages').select('*').order('id', { ascending: false });
+          if (pkgsData) setPkgs(pkgsData);
 
-        const { data: bankData } = await supabase.from('bank_logs').select('*').order('id', { ascending: false });
-        if (bankData) setBankLogs(bankData);
-
-        setLoading(false);
+          const { data: bankData } = await supabase.from('bank_logs').select('*').order('id', { ascending: false });
+          if (bankData) setBankLogs(bankData);
+        } catch (err) {
+          console.error("Lỗi tải dữ liệu:", err);
+        } finally {
+          setLoading(false);
+        }
       };
 
       const handlePinSubmit = (e) => {
@@ -105,7 +110,6 @@
         setIsAuthenticated(false);
       };
 
-      // XỬ LÝ KHI CHỌN GÓI CƯỚC TỪ DROPDOWN
       const handleSelectPackage = (e) => {
         const selectedName = e.target.value;
         if (selectedName === 'custom') {
@@ -233,6 +237,29 @@
         }
       }, [isAuthenticated, txs, stats]);
 
+      // --- THÊM / SỬA / XÓA GIAO DỊCH ---
+      const handleOpenCreateTx = () => {
+        setEditingTx(null);
+        setTxForm({ type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0] });
+        setShowTxModal(true);
+      };
+
+      const handleOpenEditTx = (t) => {
+        setEditingTx(t);
+        setTxForm({
+          type: t.type || 'Phát triển mới',
+          service: t.service || 'SIM',
+          packageName: t.packageName || '',
+          months: t.months || 12,
+          bonusMonths: t.bonusMonths || 0,
+          amount: t.amount || '',
+          customer: t.customer || '',
+          phone: t.phone || '',
+          startDate: t.startDate || new Date().toISOString().split('T')[0]
+        });
+        setShowTxModal(true);
+      };
+
       const handleSaveTx = async (e) => {
         e.preventDefault();
         const d = new Date(txForm.startDate);
@@ -252,12 +279,47 @@
           expireDate: expireDate
         };
 
-        const { data, error } = await supabase.from('transactions').insert([payload]).select();
-        if (error) alert('Lỗi: ' + error.message);
-        else if (data) {
-          setTxs([data[0], ...txs]);
-          setShowTxModal(false);
+        if (editingTx) {
+          const { data, error } = await supabase.from('transactions').update(payload).eq('id', editingTx.id).select();
+          if (error) alert('Lỗi sửa giao dịch: ' + error.message);
+          else if (data) {
+            setTxs(txs.map(item => item.id === editingTx.id ? data[0] : item));
+            setShowTxModal(false);
+          }
+        } else {
+          const { data, error } = await supabase.from('transactions').insert([payload]).select();
+          if (error) alert('Lỗi tạo giao dịch: ' + error.message);
+          else if (data) {
+            setTxs([data[0], ...txs]);
+            setShowTxModal(false);
+          }
         }
+      };
+
+      const handleDeleteTx = async (id) => {
+        if (!confirm('Bạn có chắc chắn muốn xóa giao dịch này?')) return;
+        const { error } = await supabase.from('transactions').delete().eq('id', id);
+        if (error) alert('Lỗi xóa giao dịch: ' + error.message);
+        else setTxs(txs.filter(t => t.id !== id));
+      };
+
+      // --- THÊM / SỬA / XÓA GÓI CƯỚC ---
+      const handleOpenCreatePkg = () => {
+        setEditingPkg(null);
+        setPkgForm({ name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '' });
+        setShowPkgModal(true);
+      };
+
+      const handleOpenEditPkg = (p) => {
+        setEditingPkg(p);
+        setPkgForm({
+          name: p.name || '',
+          service: p.service || 'SIM',
+          months: p.months || 12,
+          bonusMonths: p.bonusMonths || 0,
+          price: p.price || ''
+        });
+        setShowPkgModal(true);
       };
 
       const handleSavePkg = async (e) => {
@@ -267,20 +329,34 @@
           service: pkgForm.service,
           months: Number(pkgForm.months),
           bonusMonths: Number(pkgForm.bonusMonths),
-          price: Number(pkgForm.price),
-          description: pkgForm.description
+          price: Number(pkgForm.price)
         };
 
-        const { data, error } = await supabase.from('packages').insert([payload]).select();
-        if (error) {
-          alert('Lỗi tạo gói cước: ' + error.message);
-        } else if (data) {
-          setPkgs([data[0], ...pkgs]);
-          setShowPkgModal(false);
-          setPkgForm({ name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '', description: '' });
+        if (editingPkg) {
+          const { data, error } = await supabase.from('packages').update(payload).eq('id', editingPkg.id).select();
+          if (error) alert('Lỗi cập nhật gói cước: ' + error.message);
+          else if (data) {
+            setPkgs(pkgs.map(item => item.id === editingPkg.id ? data[0] : item));
+            setShowPkgModal(false);
+          }
+        } else {
+          const { data, error } = await supabase.from('packages').insert([payload]).select();
+          if (error) alert('Lỗi tạo gói cước: ' + error.message);
+          else if (data) {
+            setPkgs([data[0], ...pkgs]);
+            setShowPkgModal(false);
+          }
         }
       };
 
+      const handleDeletePkg = async (id) => {
+        if (!confirm('Bạn có chắc chắn muốn xóa gói cước này?')) return;
+        const { error } = await supabase.from('packages').delete().eq('id', id);
+        if (error) alert('Lỗi xóa gói cước: ' + error.message);
+        else setPkgs(pkgs.filter(p => p.id !== id));
+      };
+
+      // --- NỘP TIỀN NGÂN HÀNG ---
       const handleSaveBank = async (e) => {
         e.preventDefault();
         const payload = {
@@ -300,7 +376,6 @@
         }
       };
 
-      // MÀN HÌNH NHẬP PIN (RESPONSIVE)
       if (!isAuthenticated) {
         return (
           <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -338,7 +413,6 @@
 
       return (
         <div className="flex flex-col md:flex-row min-h-screen bg-[#f3f4f6]">
-          {/* SIDEBAR TRÊN MÁY TÍNH */}
           <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col justify-between p-4 shrink-0 h-screen sticky top-0">
             <div>
               <div className="flex items-center gap-3 px-2 mb-6">
@@ -355,12 +429,11 @@
                 <button onClick={() => setActiveNav('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition ${activeNav === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100'}`}>
                   <i className="fa-solid fa-table-cells-large text-sm"></i> Dashboard
                 </button>
-                <button onClick={() => setShowPkgModal(true)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100 transition`}>
+                <button onClick={handleOpenCreatePkg} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100 transition`}>
                   <i className="fa-solid fa-box text-sm"></i> Tạo Gói Cước
                 </button>
               </nav>
 
-              {/* MỤC TIÊU THÁNG */}
               <div className="mt-6 bg-gradient-to-br from-blue-50 to-blue-100/60 p-4 rounded-2xl border border-blue-100 space-y-3">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-blue-900">Mục tiêu tháng</span>
@@ -398,9 +471,7 @@
             </div>
           </aside>
 
-          {/* MAIN CONTENT */}
           <div className="flex-1 flex flex-col min-w-0">
-            {/* HEADER CHO CẢ DESKTOP & MOBILE */}
             <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex md:hidden items-center justify-center text-white font-bold text-xs">
@@ -421,8 +492,6 @@
             </header>
 
             <main className="p-3 md:p-6 space-y-4 md:space-y-5 overflow-y-auto custom-scrollbar">
-              
-              {/* 6 KHỐI THỐNG KÊ (GRID RESPONSIVE 2 CỘT MOBILE / 6 CỘT DESKTOP) */}
               <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 md:gap-3">
                 <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
                   <div className="flex items-center justify-between mb-1">
@@ -479,9 +548,8 @@
                 </div>
               </div>
 
-              {/* 5 NÚT HÀNH ĐỘNG NHANH (RESPONSIVE) */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 md:gap-3">
-                <button onClick={() => setShowTxModal(true)} className="bg-blue-600 active:bg-blue-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                <button onClick={handleOpenCreateTx} className="bg-blue-600 active:bg-blue-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
                   <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-plus"></i></div>
                   <div className="text-left overflow-hidden">
                     <div className="font-bold text-xs truncate">Tạo giao dịch</div>
@@ -489,7 +557,7 @@
                   </div>
                 </button>
 
-                <button onClick={() => setShowPkgModal(true)} className="bg-indigo-600 active:bg-indigo-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                <button onClick={handleOpenCreatePkg} className="bg-indigo-600 active:bg-indigo-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
                   <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-box"></i></div>
                   <div className="text-left overflow-hidden">
                     <div className="font-bold text-xs truncate">Tạo gói cước</div>
@@ -497,7 +565,7 @@
                   </div>
                 </button>
 
-                <button onClick={() => setShowTxModal(true)} className="bg-emerald-600 active:bg-emerald-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                <button onClick={handleOpenCreateTx} className="bg-emerald-600 active:bg-emerald-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
                   <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-user-plus"></i></div>
                   <div className="text-left overflow-hidden">
                     <div className="font-bold text-xs truncate">Thêm khách</div>
@@ -522,7 +590,6 @@
                 </button>
               </div>
 
-              {/* BIỂU ĐỒ & KHÁCH SẮP ĐẾN HẠN (RESPONSIVE) */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
                 <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
                   <h3 className="font-bold text-xs text-slate-800">Doanh thu theo ngày</h3>
@@ -559,12 +626,61 @@
                 </div>
               </div>
 
-              {/* BẢNG GIAO DỊCH VÀ LỊCH NỘP TIỀN */}
+              {/* BẢNG DANH SÁCH GÓI CƯỚC MỚI BỔ SUNG */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-xs text-slate-800"><i className="fa-solid fa-box text-indigo-600 mr-1.5"></i> Danh sách Gói Cước ({pkgs.length})</h3>
+                  <button onClick={handleOpenCreatePkg} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                    <i className="fa-solid fa-plus mr-1"></i> Tạo Gói
+                  </button>
+                </div>
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left text-[11px] min-w-[500px]">
+                    <thead className="bg-slate-50 text-slate-400 border-b">
+                      <tr>
+                        <th className="p-2">Tên Gói</th>
+                        <th className="p-2">Dịch Vụ</th>
+                        <th className="p-2">Chu Kỳ</th>
+                        <th className="p-2">Giá Tiền</th>
+                        <th className="p-2 text-center">Thao Tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {pkgs.map(p => (
+                        <tr key={p.id}>
+                          <td className="p-2 font-bold text-indigo-600 whitespace-nowrap">{p.name}</td>
+                          <td className="p-2 whitespace-nowrap">{p.service}</td>
+                          <td className="p-2 whitespace-nowrap">{p.months} tháng {p.bonusMonths ? `(+${p.bonusMonths}T KM)` : ''}</td>
+                          <td className="p-2 font-bold whitespace-nowrap">{(p.price || 0).toLocaleString()} đ</td>
+                          <td className="p-2 text-center whitespace-nowrap">
+                            <button onClick={() => handleOpenEditPkg(p)} className="p-1 px-2 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
+                              <i className="fa-solid fa-pen-to-square"></i> Sửa
+                            </button>
+                            <button onClick={() => handleDeletePkg(p.id)} className="p-1 px-2 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
+                              <i className="fa-solid fa-trash"></i> Xóa
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {pkgs.length === 0 && (
+                        <tr><td colSpan="5" className="p-3 text-center text-slate-400">Chưa có gói cước nào</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
+                {/* BẢNG GIAO DỊCH CÓ NÚT SỬA XÓA */}
                 <div className="md:col-span-8 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <h3 className="font-bold text-xs text-slate-800">Giao dịch gần đây ({txs.length})</h3>
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-bold text-xs text-slate-800">Giao dịch gần đây ({txs.length})</h3>
+                    <button onClick={handleOpenCreateTx} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg">
+                      <i className="fa-solid fa-plus mr-1"></i> Thêm GD
+                    </button>
+                  </div>
                   <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left text-[11px] min-w-[450px]">
+                    <table className="w-full text-left text-[11px] min-w-[550px]">
                       <thead className="bg-slate-50 text-slate-400 border-b">
                         <tr>
                           <th className="p-2">Ngày GD</th>
@@ -572,18 +688,30 @@
                           <th className="p-2">SĐT</th>
                           <th className="p-2">Gói cước</th>
                           <th className="p-2">Số tiền</th>
+                          <th className="p-2 text-center">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
-                        {txs.slice(0, 5).map(t => (
+                        {txs.slice(0, 15).map(t => (
                           <tr key={t.id}>
                             <td className="p-2 whitespace-nowrap">{t.startDate}</td>
                             <td className="p-2 font-bold whitespace-nowrap">{t.customer}</td>
                             <td className="p-2 whitespace-nowrap">{t.phone}</td>
                             <td className="p-2 text-blue-600 font-bold whitespace-nowrap">{t.packageName}</td>
                             <td className="p-2 font-black whitespace-nowrap">{(t.amount || 0).toLocaleString()} đ</td>
+                            <td className="p-2 text-center whitespace-nowrap">
+                              <button onClick={() => handleOpenEditTx(t)} className="p-1 px-2 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
+                                <i className="fa-solid fa-pen-to-square"></i>
+                              </button>
+                              <button onClick={() => handleDeleteTx(t.id)} className="p-1 px-2 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
+                            </td>
                           </tr>
                         ))}
+                        {txs.length === 0 && (
+                          <tr><td colSpan="6" className="p-3 text-center text-slate-400">Chưa có giao dịch nào</td></tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -619,17 +747,16 @@
             </main>
           </div>
 
-          {/* BOTTOM NAVIGATION CHO ĐIỆN THOẠI */}
           <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around py-2 px-3 z-30 shadow-lg">
             <button onClick={() => setActiveNav('dashboard')} className={`flex flex-col items-center gap-1 ${activeNav === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
               <i className="fa-solid fa-table-cells-large text-base"></i>
               <span className="text-[10px] font-bold">Tổng quan</span>
             </button>
-            <button onClick={() => setShowTxModal(true)} className="flex flex-col items-center gap-1 text-slate-400">
+            <button onClick={handleOpenCreateTx} className="flex flex-col items-center gap-1 text-slate-400">
               <i className="fa-solid fa-circle-plus text-base text-blue-600"></i>
               <span className="text-[10px] font-bold text-slate-700">Tạo GD</span>
             </button>
-            <button onClick={() => setShowPkgModal(true)} className="flex flex-col items-center gap-1 text-slate-400">
+            <button onClick={handleOpenCreatePkg} className="flex flex-col items-center gap-1 text-slate-400">
               <i className="fa-solid fa-box text-base text-indigo-600"></i>
               <span className="text-[10px] font-bold text-slate-700">Tạo Gói</span>
             </button>
@@ -639,18 +766,21 @@
             </button>
           </div>
 
-          {/* MODAL TẠO GÓI CƯỚC MỚI */}
+          {/* MODAL TẠO / SỬA GÓI CƯỚC */}
           {showPkgModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
               <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center border-b pb-3">
-                  <h3 className="text-sm font-black text-slate-900"><i className="fa-solid fa-box text-indigo-600 mr-2"></i>Tạo Gói Cước Mới</h3>
+                  <h3 className="text-sm font-black text-slate-900">
+                    <i className="fa-solid fa-box text-indigo-600 mr-2"></i>
+                    {editingPkg ? 'Sửa Gói Cước' : 'Tạo Gói Cước Mới'}
+                  </h3>
                   <button onClick={() => setShowPkgModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
                 </div>
                 <form onSubmit={handleSavePkg} className="space-y-3">
                   <div>
                     <label className="text-xs font-bold text-slate-600">Tên Gói Cước</label>
-                    <input required type="text" placeholder="VD: FCLUB_12T, YOLO100" value={pkgForm.name} onChange={e => setPkgForm({...pkgForm, name: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-indigo-600" />
+                    <input required type="text" placeholder="VD: FClub, YOLO100" value={pkgForm.name} onChange={e => setPkgForm({...pkgForm, name: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-indigo-600" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -676,22 +806,22 @@
                       <input type="number" value={pkgForm.bonusMonths} onChange={e => setPkgForm({...pkgForm, bonusMonths: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Mô Tả Gói</label>
-                    <input type="text" placeholder="1GB/ngày, miễn phí gọi nội mạng..." value={pkgForm.description} onChange={e => setPkgForm({...pkgForm, description: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
-                  </div>
-                  <button type="submit" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">LƯU GÓI CƯỚC VÀO SYSTEM</button>
+                  <button type="submit" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">
+                    {editingPkg ? 'CẬP NHẬT GÓI CƯỚC' : 'LƯU GÓI CƯỚC VÀO SYSTEM'}
+                  </button>
                 </form>
               </div>
             </div>
           )}
 
-          {/* MODAL THÊM GIAO DỊCH (FULL RESPONSIVE + CHỌN GÓI CƯỚC DROPDOWN) */}
+          {/* MODAL TẠO / SỬA GIAO DỊCH */}
           {showTxModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
               <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center border-b pb-3">
-                  <h3 className="text-sm font-black text-slate-900">➕ Thêm Giao Dịch Mới</h3>
+                  <h3 className="text-sm font-black text-slate-900">
+                    {editingTx ? '✏️ Chỉnh Sửa Giao Dịch' : '➕ Thêm Giao Dịch Mới'}
+                  </h3>
                   <button onClick={() => setShowTxModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
                 </div>
                 <form onSubmit={handleSaveTx} className="space-y-3">
@@ -713,11 +843,10 @@
                     </div>
                   </div>
 
-                  {/* DANH SÁCH CHỌN GÓI CƯỚC */}
                   <div>
                     <div className="flex justify-between items-center">
                       <label className="text-xs font-bold text-slate-600">Chọn Gói Cước Theo Danh Sách</label>
-                      <button type="button" onClick={() => setShowPkgModal(true)} className="text-[10px] font-bold text-indigo-600 hover:underline">+ Tạo gói mới</button>
+                      <button type="button" onClick={handleOpenCreatePkg} className="text-[10px] font-bold text-indigo-600 hover:underline">+ Tạo gói mới</button>
                     </div>
                     <select onChange={handleSelectPackage} value={txForm.packageName} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-blue-600 bg-blue-50/50 border-blue-200">
                       <option value="">-- Chọn gói cước có sẵn --</option>
@@ -761,7 +890,9 @@
                     </div>
                   </div>
 
-                  <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs mt-2 transition">LƯU GIAO DỊCH LÊN SUPABASE</button>
+                  <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs mt-2 transition">
+                    {editingTx ? 'CẬP NHẬT GIAO DỊCH' : 'LƯU GIAO DỊCH LÊN SUPABASE'}
+                  </button>
                 </form>
               </div>
             </div>
