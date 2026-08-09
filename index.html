@@ -46,12 +46,17 @@
       
       // Control Modals
       const [showTxModal, setShowTxModal] = useState(false);
+      const [showPkgModal, setShowPkgModal] = useState(false);
       const [showBankModal, setShowBankModal] = useState(false);
       const [showReportModal, setShowReportModal] = useState(false);
 
       // Forms
       const [txForm, setTxForm] = useState({
         type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0]
+      });
+
+      const [pkgForm, setPkgForm] = useState({
+        name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '', description: ''
       });
 
       const [bankForm, setBankForm] = useState({
@@ -74,7 +79,7 @@
         const { data: txsData } = await supabase.from('transactions').select('*').order('id', { ascending: false });
         if (txsData) setTxs(txsData);
 
-        const { data: pkgsData } = await supabase.from('packages').select('*');
+        const { data: pkgsData } = await supabase.from('packages').select('*').order('id', { ascending: false });
         if (pkgsData) setPkgs(pkgsData);
 
         const { data: bankData } = await supabase.from('bank_logs').select('*').order('id', { ascending: false });
@@ -98,6 +103,28 @@
       const handleLogout = () => {
         localStorage.removeItem('crm_authenticated');
         setIsAuthenticated(false);
+      };
+
+      // XỬ LÝ KHI CHỌN GÓI CƯỚC TỪ DROPDOWN
+      const handleSelectPackage = (e) => {
+        const selectedName = e.target.value;
+        if (selectedName === 'custom') {
+          setTxForm(prev => ({ ...prev, packageName: '' }));
+          return;
+        }
+        const foundPkg = pkgs.find(p => p.name === selectedName);
+        if (foundPkg) {
+          setTxForm(prev => ({
+            ...prev,
+            packageName: foundPkg.name,
+            service: foundPkg.service || prev.service,
+            months: foundPkg.months || 12,
+            bonusMonths: foundPkg.bonusMonths || 0,
+            amount: foundPkg.price || prev.amount
+          }));
+        } else {
+          setTxForm(prev => ({ ...prev, packageName: selectedName }));
+        }
       };
 
       const stats = useMemo(() => {
@@ -233,6 +260,27 @@
         }
       };
 
+      const handleSavePkg = async (e) => {
+        e.preventDefault();
+        const payload = {
+          name: pkgForm.name,
+          service: pkgForm.service,
+          months: Number(pkgForm.months),
+          bonusMonths: Number(pkgForm.bonusMonths),
+          price: Number(pkgForm.price),
+          description: pkgForm.description
+        };
+
+        const { data, error } = await supabase.from('packages').insert([payload]).select();
+        if (error) {
+          alert('Lỗi tạo gói cước: ' + error.message);
+        } else if (data) {
+          setPkgs([data[0], ...pkgs]);
+          setShowPkgModal(false);
+          setPkgForm({ name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '', description: '' });
+        }
+      };
+
       const handleSaveBank = async (e) => {
         e.preventDefault();
         const payload = {
@@ -307,11 +355,8 @@
                 <button onClick={() => setActiveNav('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition ${activeNav === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100'}`}>
                   <i className="fa-solid fa-table-cells-large text-sm"></i> Dashboard
                 </button>
-                <button onClick={() => setActiveNav('txs')} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition ${activeNav === 'txs' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100'}`}>
-                  <div className="flex items-center gap-3">
-                    <i className="fa-solid fa-arrows-repeat text-sm"></i> Giao dịch
-                  </div>
-                  <span className="text-[9px] opacity-75 font-normal">Cloud</span>
+                <button onClick={() => setShowPkgModal(true)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100 transition`}>
+                  <i className="fa-solid fa-box text-sm"></i> Tạo Gói Cước
                 </button>
               </nav>
 
@@ -434,13 +479,21 @@
                 </div>
               </div>
 
-              {/* 4 NÚT HÀNH ĐỘNG NHANH (RESPONSIVE) */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-4">
+              {/* 5 NÚT HÀNH ĐỘNG NHANH (RESPONSIVE) */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 md:gap-3">
                 <button onClick={() => setShowTxModal(true)} className="bg-blue-600 active:bg-blue-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
                   <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-plus"></i></div>
                   <div className="text-left overflow-hidden">
-                    <div className="font-bold text-xs truncate">Thêm giao dịch</div>
+                    <div className="font-bold text-xs truncate">Tạo giao dịch</div>
                     <div className="text-[9px] opacity-80 hidden md:block">Lưu dữ liệu</div>
+                  </div>
+                </button>
+
+                <button onClick={() => setShowPkgModal(true)} className="bg-indigo-600 active:bg-indigo-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                  <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-box"></i></div>
+                  <div className="text-left overflow-hidden">
+                    <div className="font-bold text-xs truncate">Tạo gói cước</div>
+                    <div className="text-[9px] opacity-80 hidden md:block">DS gói cước ({pkgs.length})</div>
                   </div>
                 </button>
 
@@ -460,7 +513,7 @@
                   </div>
                 </button>
 
-                <button onClick={() => setShowReportModal(true)} className="bg-amber-500 active:bg-amber-600 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                <button onClick={() => setShowReportModal(true)} className="bg-amber-500 active:bg-amber-600 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition col-span-2 md:col-span-1">
                   <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-chart-pie"></i></div>
                   <div className="text-left overflow-hidden">
                     <div className="font-bold text-xs truncate">Báo cáo DT</div>
@@ -572,17 +625,149 @@
               <i className="fa-solid fa-table-cells-large text-base"></i>
               <span className="text-[10px] font-bold">Tổng quan</span>
             </button>
-            <button onClick={() => setShowTxModal(true)} className={`flex flex-col items-center gap-1 text-slate-400`}>
+            <button onClick={() => setShowTxModal(true)} className="flex flex-col items-center gap-1 text-slate-400">
               <i className="fa-solid fa-circle-plus text-base text-blue-600"></i>
-              <span className="text-[10px] font-bold text-slate-700">Tạo mới</span>
+              <span className="text-[10px] font-bold text-slate-700">Tạo GD</span>
             </button>
-            <button onClick={() => setShowReportModal(true)} className={`flex flex-col items-center gap-1 text-slate-400`}>
+            <button onClick={() => setShowPkgModal(true)} className="flex flex-col items-center gap-1 text-slate-400">
+              <i className="fa-solid fa-box text-base text-indigo-600"></i>
+              <span className="text-[10px] font-bold text-slate-700">Tạo Gói</span>
+            </button>
+            <button onClick={() => setShowReportModal(true)} className="flex flex-col items-center gap-1 text-slate-400">
               <i className="fa-solid fa-chart-pie text-base"></i>
               <span className="text-[10px] font-bold">Báo cáo</span>
             </button>
           </div>
 
-          {/* MODAL NỘP TIỀN NGÂN HÀNG (FULL RESPONSIVE) */}
+          {/* MODAL TẠO GÓI CƯỚC MỚI */}
+          {showPkgModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900"><i className="fa-solid fa-box text-indigo-600 mr-2"></i>Tạo Gói Cước Mới</h3>
+                  <button onClick={() => setShowPkgModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+                </div>
+                <form onSubmit={handleSavePkg} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Tên Gói Cước</label>
+                    <input required type="text" placeholder="VD: FCLUB_12T, YOLO100" value={pkgForm.name} onChange={e => setPkgForm({...pkgForm, name: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-indigo-600" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Loại Dịch Vụ</label>
+                      <select value={pkgForm.service} onChange={e => setPkgForm({...pkgForm, service: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
+                        <option value="SIM">SIM Di Động</option>
+                        <option value="Fiber">Fiber Internet</option>
+                        <option value="MyTV">MyTV</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Giá Gói (đ)</label>
+                      <input required type="number" placeholder="900000" value={pkgForm.price} onChange={e => setPkgForm({...pkgForm, price: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Chu Kỳ (Tháng)</label>
+                      <input type="number" value={pkgForm.months} onChange={e => setPkgForm({...pkgForm, months: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-emerald-600">Tháng Khuyến Mãi</label>
+                      <input type="number" value={pkgForm.bonusMonths} onChange={e => setPkgForm({...pkgForm, bonusMonths: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Mô Tả Gói</label>
+                    <input type="text" placeholder="1GB/ngày, miễn phí gọi nội mạng..." value={pkgForm.description} onChange={e => setPkgForm({...pkgForm, description: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                  </div>
+                  <button type="submit" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">LƯU GÓI CƯỚC VÀO SYSTEM</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL THÊM GIAO DỊCH (FULL RESPONSIVE + CHỌN GÓI CƯỚC DROPDOWN) */}
+          {showTxModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900">➕ Thêm Giao Dịch Mới</h3>
+                  <button onClick={() => setShowTxModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+                </div>
+                <form onSubmit={handleSaveTx} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Loại Dịch Vụ</label>
+                      <select value={txForm.service} onChange={e => setTxForm({...txForm, service: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
+                        <option value="SIM">SIM Di Động</option>
+                        <option value="Fiber">Fiber Internet</option>
+                        <option value="MyTV">MyTV</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Loại Giao Dịch</label>
+                      <select value={txForm.type} onChange={e => setTxForm({...txForm, type: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
+                        <option value="Phát triển mới">Phát triển mới</option>
+                        <option value="Gia hạn">Gia hạn</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* DANH SÁCH CHỌN GÓI CƯỚC */}
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-slate-600">Chọn Gói Cước Theo Danh Sách</label>
+                      <button type="button" onClick={() => setShowPkgModal(true)} className="text-[10px] font-bold text-indigo-600 hover:underline">+ Tạo gói mới</button>
+                    </div>
+                    <select onChange={handleSelectPackage} value={txForm.packageName} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-blue-600 bg-blue-50/50 border-blue-200">
+                      <option value="">-- Chọn gói cước có sẵn --</option>
+                      {pkgs.map(p => (
+                        <option key={p.id} value={p.name}>
+                          {p.name} ({p.service}) - {p.price ? p.price.toLocaleString() + 'đ' : ''} [{p.months}T + {p.bonusMonths}T KM]
+                        </option>
+                      ))}
+                      <option value="custom">✍️ Nhập gói cước khác...</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Tên Gói Cước Hiển Thị</label>
+                    <input required type="text" placeholder="FCLUB_12T" value={txForm.packageName} onChange={e => setTxForm({...txForm, packageName: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-blue-600" />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Tên Khách Hàng</label>
+                      <input required type="text" placeholder="Nguyễn Văn A" value={txForm.customer} onChange={e => setTxForm({...txForm, customer: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Số Điện Thoại</label>
+                      <input type="text" placeholder="0911721999" value={txForm.phone} onChange={e => setTxForm({...txForm, phone: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Chu kỳ (tháng)</label>
+                      <input type="number" value={txForm.months} onChange={e => setTxForm({...txForm, months: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-emerald-600">Tháng KM</label>
+                      <input type="number" value={txForm.bonusMonths} onChange={e => setTxForm({...txForm, bonusMonths: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Số Tiền (đ)</label>
+                      <input required type="number" value={txForm.amount} onChange={e => setTxForm({...txForm, amount: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs font-bold" />
+                    </div>
+                  </div>
+
+                  <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs mt-2 transition">LƯU GIAO DỊCH LÊN SUPABASE</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL NỘP TIỀN NGÂN HÀNG */}
           {showBankModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
               <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -621,7 +806,7 @@
             </div>
           )}
 
-          {/* MODAL BÁO CÁO DOANH THU (FULL RESPONSIVE) */}
+          {/* MODAL BÁO CÁO DOANH THU */}
           {showReportModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
               <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-xl p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -667,48 +852,6 @@
             </div>
           )}
 
-          {/* MODAL THÊM GIAO DỊCH (FULL RESPONSIVE) */}
-          {showTxModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <h3 className="text-sm font-black text-slate-900">➕ Thêm Giao Dịch Mới</h3>
-                  <button onClick={() => setShowTxModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
-                </div>
-                <form onSubmit={handleSaveTx} className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Khách Hàng</label>
-                      <input required type="text" placeholder="Nguyễn Văn A" value={txForm.customer} onChange={e => setTxForm({...txForm, customer: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">SĐT</label>
-                      <input type="text" placeholder="0911721999" value={txForm.phone} onChange={e => setTxForm({...txForm, phone: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Gói Cước</label>
-                    <input required type="text" placeholder="FCLUB" value={txForm.packageName} onChange={e => setTxForm({...txForm, packageName: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-blue-600" />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Tháng</label>
-                      <input type="number" value={txForm.months} onChange={e => setTxForm({...txForm, months: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-emerald-600">Tháng KM</label>
-                      <input type="number" value={txForm.bonusMonths} onChange={e => setTxForm({...txForm, bonusMonths: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Số Tiền (đ)</label>
-                      <input required type="number" value={txForm.amount} onChange={e => setTxForm({...txForm, amount: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs font-bold" />
-                    </div>
-                  </div>
-                  <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs mt-2 transition">LƯU GIAO DỊCH LÊN SUPABASE</button>
-                </form>
-              </div>
-            </div>
-          )}
         </div>
       );
     }
