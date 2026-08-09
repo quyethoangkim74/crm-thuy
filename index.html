@@ -28,20 +28,35 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4Y3hmdGl2bW1nd2FrY3hybm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyODIxNzUsImV4cCI6MjEwMTg1ODE3NX0.nCw8bgYSHE3Q49iGiqK6SuEjcYg5xs22Oa-2-EXqNnw';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // MÃ PIN ĐĂNG NHẬP (Thay đổi mã ở đây)
+    const CORRECT_PIN = '1234';
+
     function App() {
+      // KIỂM TRA MÃ PIN ĐÃ LƯU TRONG MÁY CHƯA
+      const [isAuthenticated, setIsAuthenticated] = useState(() => {
+        return localStorage.getItem('crm_authenticated') === 'true';
+      });
+      const [pinInput, setPinInput] = useState('');
+      const [pinError, setPinError] = useState('');
+
       const [activeNav, setActiveNav] = useState('dashboard');
       const [txs, setTxs] = useState([]);
       const [pkgs, setPkgs] = useState([]);
-      const [bankLogs, setBankLogs] = useState([
-        { id: 1, date: '07/08/2026', amount: 5000000, bank: 'MB Bank' },
-        { id: 2, date: '05/08/2026', amount: 3500000, bank: 'Vietcombank' },
-        { id: 3, date: '02/08/2026', amount: 4000000, bank: 'BIDV' }
-      ]);
+      const [bankLogs, setBankLogs] = useState([]);
       const [loading, setLoading] = useState(false);
+      
+      // Control Modals
       const [showTxModal, setShowTxModal] = useState(false);
+      const [showBankModal, setShowBankModal] = useState(false);
+      const [showReportModal, setShowReportModal] = useState(false);
 
+      // Forms
       const [txForm, setTxForm] = useState({
         type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0]
+      });
+
+      const [bankForm, setBankForm] = useState({
+        amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: ''
       });
 
       const barChartRef = useRef(null);
@@ -50,8 +65,10 @@
       const doughnutChartInstance = useRef(null);
 
       useEffect(() => {
-        loadData();
-      }, []);
+        if (isAuthenticated) {
+          loadData();
+        }
+      }, [isAuthenticated]);
 
       const loadData = async () => {
         setLoading(true);
@@ -60,10 +77,32 @@
 
         const { data: pkgsData } = await supabase.from('packages').select('*');
         if (pkgsData) setPkgs(pkgsData);
+
+        const { data: bankData } = await supabase.from('bank_logs').select('*').order('id', { ascending: false });
+        if (bankData) setBankLogs(bankData);
+
         setLoading(false);
       };
 
-      // TÍNH TOÁN CÁC CON SỐ DỰA TRÊN DỮ LIỆU THỰC TẾ
+      // XỬ LÝ NHẬP MÃ PIN
+      const handlePinSubmit = (e) => {
+        e.preventDefault();
+        if (pinInput === CORRECT_PIN) {
+          localStorage.setItem('crm_authenticated', 'true');
+          setIsAuthenticated(true);
+          setPinError('');
+        } else {
+          setPinError('Mã PIN không đúng. Vui lòng thử lại!');
+          setPinInput('');
+        }
+      };
+
+      const handleLogout = () => {
+        localStorage.removeItem('crm_authenticated');
+        setIsAuthenticated(false);
+      };
+
+      // TÍNH TOÁN CÁC SỐ LIỆU ĐỘNG
       const stats = useMemo(() => {
         const simTxs = txs.filter(t => t.service === 'SIM');
         const fiberTxs = txs.filter(t => t.service === 'Fiber');
@@ -74,7 +113,7 @@
         const fiberRev = fiberTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
         const renewalRev = renewalTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-        const totalBankPaid = bankLogs.reduce((sum, item) => sum + item.amount, 0);
+        const totalBankPaid = bankLogs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
         const remaining = totalRev - totalBankPaid;
 
         return {
@@ -90,11 +129,9 @@
         };
       }, [txs, bankLogs]);
 
-      // MỤC TIÊU THÁNG 25M
       const targetRev = 25000000;
       const targetPercent = Math.min(Math.round((stats.totalRev / targetRev) * 100), 100);
 
-      // KHÁCH SẮP ĐẾN HẠN DỰA TÊN DỮ LIỆU THỰC
       const upcomingExpirations = useMemo(() => {
         const today = new Date();
         return txs.map(t => {
@@ -107,26 +144,24 @@
           .slice(0, 4);
       }, [txs]);
 
-      // VẼ BIỂU ĐỒ ĐỘNG THEO DỮ LIỆU SUPABASE
+      // VẼ BIỂU ĐỒ
       useEffect(() => {
-        if (!txs.length) return;
+        if (!isAuthenticated) return;
 
-        // Biểu đồ cột: Doanh thu theo ngày trong tháng
         if (barChartRef.current) {
           if (barChartInstance.current) barChartInstance.current.destroy();
           
-          // Gom nhóm doanh thu theo ngày
           const daysMap = {};
           txs.forEach(t => {
             if (t.startDate) {
-              const day = t.startDate.split('-')[2] || t.startDate.split('/')[0];
-              const dayNum = parseInt(day, 10);
+              const parts = t.startDate.split('-');
+              const dayNum = parseInt(parts[2] || parts[0], 10);
               daysMap[dayNum] = (daysMap[dayNum] || 0) + (Number(t.amount) || 0);
             }
           });
 
-          const labels = Array.from({length: 31}, (_, i) => String(i + 1).padStart(2, '0'));
-          const dataPoints = labels.map(day => (daysMap[parseInt(day, 10)] || 0) / 1000000);
+          const labels = ['01', '04', '07', '10', '13', '16', '19', '22', '25', '28', '31'];
+          const dataPoints = labels.map(day => ((daysMap[parseInt(day, 10)] || 0) / 1000000));
 
           const ctx = barChartRef.current.getContext('2d');
           barChartInstance.current = new Chart(ctx, {
@@ -137,7 +172,7 @@
                 data: dataPoints,
                 backgroundColor: '#2563eb',
                 borderRadius: 4,
-                barThickness: 6
+                barThickness: 10
               }]
             },
             options: {
@@ -152,7 +187,6 @@
           });
         }
 
-        // Biểu đồ tròn: Doanh thu theo dịch vụ
         if (doughnutChartRef.current) {
           if (doughnutChartInstance.current) doughnutChartInstance.current.destroy();
           const ctx = doughnutChartRef.current.getContext('2d');
@@ -161,7 +195,7 @@
             data: {
               labels: ['SIM mới', 'Fiber mới', 'Gia hạn'],
               datasets: [{
-                data: [stats.simRev, stats.fiberRev, stats.renewalRev],
+                data: [stats.simRev || 1, stats.fiberRev || 1, stats.renewalRev || 1],
                 backgroundColor: ['#2563eb', '#10b981', '#f59e0b'],
                 borderWidth: 0
               }]
@@ -174,15 +208,9 @@
             }
           });
         }
-      }, [txs, stats]);
+      }, [isAuthenticated, txs, stats]);
 
-      const handleSelectPkg = (pkgId) => {
-        const p = pkgs.find(item => item.id === Number(pkgId));
-        if (p) {
-          setTxForm({ ...txForm, packageName: p.name, service: p.service, amount: p.price, months: p.months, bonusMonths: p.bonusMonths });
-        }
-      };
-
+      // TẠO GIAO DỊCH MỚI
       const handleSaveTx = async (e) => {
         e.preventDefault();
         const d = new Date(txForm.startDate);
@@ -210,6 +238,63 @@
         }
       };
 
+      // NỘP TIỀN NGÂN HÀNG
+      const handleSaveBank = async (e) => {
+        e.preventDefault();
+        const payload = {
+          date: bankForm.date,
+          amount: Number(bankForm.amount),
+          bank: bankForm.bank,
+          note: bankForm.note
+        };
+
+        const { data, error } = await supabase.from('bank_logs').insert([payload]).select();
+        if (error) {
+          alert('Lỗi nộp tiền: ' + error.message);
+        } else if (data) {
+          setBankLogs([data[0], ...bankLogs]);
+          setShowBankModal(false);
+          setBankForm({ amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: '' });
+        }
+      };
+
+      // NẾU CHƯA NHẬP MÃ PIN: HIỂN THỊ MÀN HÌNH MÃ PIN
+      if (!isAuthenticated) {
+        return (
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl space-y-6 text-center">
+              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl mx-auto shadow-lg shadow-blue-500/30">
+                <i className="fa-solid fa-lock"></i>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">VNPT CRM</h2>
+                <p className="text-xs text-slate-500 mt-1">Nhập mã PIN để truy cập ứng dụng</p>
+              </div>
+
+              <form onSubmit={handlePinSubmit} className="space-y-4">
+                <input
+                  type="password"
+                  maxLength="6"
+                  placeholder="• • • •"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full text-center text-2xl font-black tracking-widest py-3 border-2 border-slate-200 rounded-2xl focus:border-blue-600 outline-none transition"
+                  autoFocus
+                />
+                {pinError && <p className="text-xs font-bold text-rose-500">{pinError}</p>}
+                <button
+                  type="submit"
+                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-600/30 transition"
+                >
+                  XÁC NHẬN MÃ PIN
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      // NẾU ĐÃ NHẬP ĐÚNG PIN: Hiển thị ứng dụng CRM
       return (
         <div className="flex min-h-screen bg-[#f3f4f6]">
           {/* SIDEBAR TRÁI */}
@@ -221,7 +306,7 @@
                 </div>
                 <div>
                   <h1 className="font-bold text-slate-900 text-sm leading-tight">CRM Bán hàng</h1>
-                  <p className="text-[10px] text-slate-400 font-medium">Quản lý giao dịch</p>
+                  <p className="text-[10px] text-slate-400 font-medium">VNPT Telecom</p>
                 </div>
               </div>
 
@@ -233,11 +318,11 @@
                   <div className="flex items-center gap-3">
                     <i className="fa-solid fa-arrows-repeat text-sm"></i> Giao dịch
                   </div>
-                  <span className="text-[9px] opacity-75 font-normal">Đồng bộ Cloud</span>
+                  <span className="text-[9px] opacity-75 font-normal">Cloud</span>
                 </button>
               </nav>
 
-              {/* CARD MỤC TIÊU THÁNG ĐỘNG */}
+              {/* MỤC TIÊU THÁNG */}
               <div className="mt-6 bg-gradient-to-br from-blue-50 to-blue-100/60 p-4 rounded-2xl border border-blue-100 space-y-3">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-blue-900">Mục tiêu tháng 08/2026</span>
@@ -268,43 +353,31 @@
               </div>
             </div>
 
-            <div className="text-[10px] text-slate-400 border-t pt-3 space-y-0.5">
-              <div>© 2026 VNPT - CRM Bán hàng</div>
-              <div>Phiên bản 1.0.0 (Data Live)</div>
+            <div className="space-y-2 border-t pt-3">
+              <button onClick={handleLogout} className="w-full text-left text-xs font-bold text-rose-600 hover:bg-rose-50 p-2 rounded-xl transition flex items-center gap-2">
+                <i className="fa-solid fa-right-from-bracket"></i> Khóa ứng dụng
+              </button>
+              <div className="text-[10px] text-slate-400">© 2026 VNPT - CRM Bán hàng</div>
             </div>
           </aside>
 
-          {/* NỘI DUNG CHÍNH */}
+          {/* MAIN CONTENT */}
           <div className="flex-1 flex flex-col min-w-0">
-            {/* HEADER */}
             <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
               <div className="flex items-center gap-4">
-                <button className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-bars"></i></button>
-                <h2 className="text-lg font-bold text-slate-800">Dashboard</h2>
+                <h2 className="text-lg font-bold text-slate-800">Dashboard Quản Lý</h2>
               </div>
-
               <div className="flex items-center gap-4">
-                {loading && <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100"><i className="fa-solid fa-spin fa-spinner mr-1"></i> Đang tải dữ liệu...</span>}
+                {loading && <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg"><i className="fa-solid fa-spin fa-spinner mr-1"></i> Đang tải dữ liệu...</span>}
                 <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
                   <span>Tháng 08/2026</span>
                   <i className="fa-regular fa-calendar text-slate-400"></i>
                 </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 pl-2 border-l">
-                    <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80" className="w-8 h-8 rounded-full object-cover border" />
-                    <div>
-                      <div className="text-xs font-bold text-slate-800 leading-tight">Nguyễn Thị A</div>
-                      <div className="text-[10px] text-slate-400">Nhân viên bán hàng</div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </header>
 
-            {/* MAIN DASHBOARD */}
             <main className="p-6 space-y-5 overflow-y-auto custom-scrollbar">
-              {/* 6 KHỐI KPI ĐỘNG */}
+              {/* 6 KHỐI THỐNG KÊ */}
               <div className="grid grid-cols-6 gap-3">
                 <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex items-start justify-between">
                   <div>
@@ -353,138 +426,84 @@
 
                 <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex items-start justify-between">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 block mb-1">Còn giữ</span>
+                    <span className="text-[10px] font-bold text-slate-400 block mb-1">Còn giữ (Chưa nộp)</span>
                     <span className="text-xs font-extrabold text-rose-600 block">{stats.remaining.toLocaleString()} đ</span>
                   </div>
                   <div className="w-8 h-8 bg-rose-500 text-white rounded-xl flex items-center justify-center text-sm"><i className="fa-solid fa-money-bill-wave"></i></div>
                 </div>
               </div>
 
-              {/* KHỐI BIỂU ĐỒ & KHÁCH SẮP ĐẾN HẠN ĐỘNG */}
+              {/* BIỂU ĐỒ & KHÁCH SẮP ĐẾN HẠN */}
               <div className="grid grid-cols-12 gap-4">
-                {/* BIỂU ĐỒ DOANH THU THEO NGÀY */}
                 <div className="col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-bold text-xs text-slate-800">Doanh thu theo ngày</h3>
-                    <span className="text-[10px] text-slate-400">Tự động tính từ Supabase</span>
-                  </div>
-                  <div className="h-44 w-full relative">
-                    <canvas ref={barChartRef}></canvas>
-                  </div>
+                  <h3 className="font-bold text-xs text-slate-800">Doanh thu theo ngày</h3>
+                  <div className="h-44 w-full relative"><canvas ref={barChartRef}></canvas></div>
                 </div>
 
-                {/* BIỂU ĐỒ DÒNG TRÒN DỊCH VỤ */}
                 <div className="col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <h3 className="font-bold text-xs text-slate-800">Doanh thu theo loại dịch vụ</h3>
+                  <h3 className="font-bold text-xs text-slate-800">Tỷ lệ dịch vụ</h3>
                   <div className="flex items-center gap-3">
                     <div className="w-32 h-36 relative flex items-center justify-center">
                       <canvas ref={doughnutChartRef}></canvas>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-[9px] text-slate-400 font-bold">Tổng</span>
-                        <span className="text-[10px] font-extrabold text-slate-800">{(stats.totalRev / 1000000).toFixed(1)}M</span>
-                      </div>
                     </div>
                     <div className="space-y-2 text-[10px]">
-                      <div>
-                        <span className="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1.5"></span>
-                        <span className="font-bold text-slate-700">SIM mới</span>
-                        <div className="text-slate-400 font-medium pl-3.5">{stats.simRev.toLocaleString()} đ</div>
-                      </div>
-                      <div>
-                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>
-                        <span className="font-bold text-slate-700">Fiber mới</span>
-                        <div className="text-slate-400 font-medium pl-3.5">{stats.fiberRev.toLocaleString()} đ</div>
-                      </div>
-                      <div>
-                        <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span>
-                        <span className="font-bold text-slate-700">Gia hạn</span>
-                        <div className="text-slate-400 font-medium pl-3.5">{stats.renewalRev.toLocaleString()} đ</div>
-                      </div>
+                      <div><span className="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1.5"></span><span className="font-bold">SIM:</span> {stats.simRev.toLocaleString()}đ</div>
+                      <div><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span><span className="font-bold">Fiber:</span> {stats.fiberRev.toLocaleString()}đ</div>
+                      <div><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span><span className="font-bold">Gia hạn:</span> {stats.renewalRev.toLocaleString()}đ</div>
                     </div>
                   </div>
                 </div>
 
-                {/* KHÁCH SẮP ĐẾN HẠN ĐỘNG */}
                 <div className="col-span-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-bold text-xs text-slate-800">Khách sắp đến hạn</h3>
-                    <span className="text-[10px] text-slate-400">Tự động tính</span>
-                  </div>
-
-                  <div className="space-y-2.5 text-xs">
-                    {upcomingExpirations.length > 0 ? upcomingExpirations.map(item => (
-                      <div key={item.id} className="flex items-center justify-between border-b pb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 bg-slate-100 text-slate-600 font-bold rounded-full flex items-center justify-center text-[10px]">
-                            {item.customer ? item.customer.charAt(0) : 'K'}
-                          </div>
-                          <div>
-                            <div className="text-[11px] font-bold text-slate-800">{item.phone || 'N/A'}</div>
-                            <div className="text-[9px] text-slate-400">{item.customer}</div>
-                          </div>
+                  <h3 className="font-bold text-xs text-slate-800">Khách sắp đến hạn</h3>
+                  <div className="space-y-2 text-xs">
+                    {upcomingExpirations.map(item => (
+                      <div key={item.id} className="flex items-center justify-between border-b pb-1">
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-800">{item.customer}</div>
+                          <div className="text-[9px] text-slate-400">{item.phone}</div>
                         </div>
-                        <div className="text-right">
-                          <span className="bg-blue-50 text-blue-600 text-[9px] font-bold px-1.5 py-0.5 rounded">{item.packageName}</span>
-                          <div className="text-[9px] font-bold text-rose-500 mt-0.5">Còn {item.diffDays} ngày</div>
-                        </div>
+                        <span className="text-[9px] font-bold text-rose-500">Còn {item.diffDays} ngày</span>
                       </div>
-                    )) : (
-                      <div className="text-[10px] text-slate-400 text-center py-4">Chưa có khách sắp hết hạn</div>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* BẢNG GIAO DỊCH VÀ LỊCH NỘP TIỀN ĐỘNG */}
+              {/* BẢNG GIAO DỊCH VÀ LỊCH NỘP TIỀN */}
               <div className="grid grid-cols-12 gap-4">
                 <div className="col-span-8 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-bold text-xs text-slate-800">Giao dịch mới nhất ({txs.length})</h3>
-                  </div>
-
+                  <h3 className="font-bold text-xs text-slate-800">Giao dịch gần đây ({txs.length})</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-[11px]">
-                      <thead className="bg-slate-50 text-slate-400 font-bold border-b">
+                      <thead className="bg-slate-50 text-slate-400 border-b">
                         <tr>
-                          <th className="p-2">Ngày giao dịch</th>
-                          <th className="p-2">Loại GD</th>
-                          <th className="p-2">Loại DV</th>
+                          <th className="p-2">Ngày GD</th>
                           <th className="p-2">Khách hàng</th>
                           <th className="p-2">SĐT</th>
                           <th className="p-2">Gói cước</th>
                           <th className="p-2">Số tiền</th>
-                          <th className="p-2">Hết hạn</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
-                        {txs.map(t => (
-                          <tr key={t.id} className="hover:bg-slate-50">
-                            <td className="p-2 font-bold">{t.startDate}</td>
-                            <td className="p-2"><span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{t.type}</span></td>
-                            <td className="p-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${t.service === 'SIM' ? 'bg-emerald-50 text-emerald-600' : 'bg-purple-50 text-purple-600'}`}>{t.service}</span></td>
-                            <td className="p-2 font-bold text-slate-900">{t.customer}</td>
+                        {txs.slice(0, 5).map(t => (
+                          <tr key={t.id}>
+                            <td className="p-2">{t.startDate}</td>
+                            <td className="p-2 font-bold">{t.customer}</td>
                             <td className="p-2">{t.phone}</td>
-                            <td className="p-2 font-bold text-blue-600">{t.packageName}</td>
+                            <td className="p-2 text-blue-600 font-bold">{t.packageName}</td>
                             <td className="p-2 font-black">{(t.amount || 0).toLocaleString()} đ</td>
-                            <td className="p-2 font-bold text-rose-500">{t.expireDate}</td>
                           </tr>
                         ))}
-                        {txs.length === 0 && (
-                          <tr><td colSpan="8" className="p-4 text-center text-slate-400">Chưa có giao dịch nào. Bấm nút bên dưới để thêm!</td></tr>
-                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
 
-                {/* LỊCH NỘP TIỀN */}
                 <div className="col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-bold text-xs text-slate-800">Lịch nộp tiền ngân hàng</h3>
-                  </div>
-
+                  <h3 className="font-bold text-xs text-slate-800">Lịch sử nộp tiền ngân hàng</h3>
                   <table className="w-full text-left text-[11px]">
-                    <thead className="bg-slate-50 text-slate-400 font-bold border-b">
+                    <thead className="bg-slate-50 text-slate-400 border-b">
                       <tr>
                         <th className="p-2">Ngày nộp</th>
                         <th className="p-2">Số tiền</th>
@@ -495,10 +514,13 @@
                       {bankLogs.map(item => (
                         <tr key={item.id}>
                           <td className="p-2">{item.date}</td>
-                          <td className="p-2 font-bold text-slate-900">{item.amount.toLocaleString()} đ</td>
-                          <td className="p-2 text-blue-600 font-bold">{item.bank}</td>
+                          <td className="p-2 font-bold text-emerald-600">{item.amount.toLocaleString()} đ</td>
+                          <td className="p-2 text-slate-700 font-bold">{item.bank}</td>
                         </tr>
                       ))}
+                      {bankLogs.length === 0 && (
+                        <tr><td colSpan="3" className="p-3 text-center text-slate-400">Chưa nộp tiền lần nào</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -506,52 +528,133 @@
 
               {/* 4 NÚT HÀNH ĐỘNG NHANH */}
               <div className="grid grid-cols-4 gap-4 pt-2">
-                <button onClick={() => setShowTxModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md shadow-blue-500/20 transition text-left">
+                <button onClick={() => setShowTxModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md transition">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-base"><i className="fa-solid fa-plus"></i></div>
-                    <div>
+                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold"><i className="fa-solid fa-plus"></i></div>
+                    <div className="text-left">
                       <div className="font-bold text-xs">Thêm giao dịch</div>
-                      <div className="text-[9px] opacity-80">Cập nhật dữ liệu ngay</div>
+                      <div className="text-[9px] opacity-80">Lưu vào cơ sở dữ liệu</div>
                     </div>
                   </div>
-                  <i className="fa-solid fa-chevron-right text-xs opacity-60"></i>
                 </button>
 
-                <button onClick={() => setShowTxModal(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md shadow-emerald-500/20 transition text-left">
+                <button onClick={() => setShowTxModal(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md transition">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-base"><i className="fa-solid fa-user-plus"></i></div>
-                    <div>
+                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold"><i className="fa-solid fa-user-plus"></i></div>
+                    <div className="text-left">
                       <div className="font-bold text-xs">Thêm khách hàng</div>
-                      <div className="text-[9px] opacity-80">Tự động thêm vào danh sách</div>
+                      <div className="text-[9px] opacity-80">Cập nhật danh sách</div>
                     </div>
                   </div>
-                  <i className="fa-solid fa-chevron-right text-xs opacity-60"></i>
                 </button>
 
-                <button className="bg-purple-600 hover:bg-purple-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md shadow-purple-500/20 transition text-left">
+                <button onClick={() => setShowBankModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md transition">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-base"><i className="fa-solid fa-wallet"></i></div>
-                    <div>
+                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold"><i className="fa-solid fa-wallet"></i></div>
+                    <div className="text-left">
                       <div className="font-bold text-xs">Nộp tiền ngân hàng</div>
-                      <div className="text-[9px] opacity-80">Trừ vào tiền còn giữ</div>
+                      <div className="text-[9px] opacity-80">Cập nhật số dư giữ</div>
                     </div>
                   </div>
-                  <i className="fa-solid fa-chevron-right text-xs opacity-60"></i>
                 </button>
 
-                <button className="bg-amber-500 hover:bg-amber-600 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md shadow-amber-500/20 transition text-left">
+                <button onClick={() => setShowReportModal(true)} className="bg-amber-500 hover:bg-amber-600 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md transition">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-base"><i className="fa-solid fa-chart-pie"></i></div>
-                    <div>
+                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold"><i className="fa-solid fa-chart-pie"></i></div>
+                    <div className="text-left">
                       <div className="font-bold text-xs">Báo cáo doanh thu</div>
-                      <div className="text-[9px] opacity-80">Kết xuất dữ liệu real-time</div>
+                      <div className="text-[9px] opacity-80">Xem tổng hợp chi tiết</div>
                     </div>
                   </div>
-                  <i className="fa-solid fa-chevron-right text-xs opacity-60"></i>
                 </button>
               </div>
             </main>
           </div>
+
+          {/* MODAL NỘP TIỀN NGÂN HÀNG */}
+          {showBankModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900"><i className="fa-solid fa-building-columns text-purple-600 mr-2"></i>Nộp Tiền Vào Ngân Hàng</h3>
+                  <button onClick={() => setShowBankModal(false)} className="text-slate-400 font-bold hover:text-slate-600">✕</button>
+                </div>
+                <form onSubmit={handleSaveBank} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Số Tiền Nộp (đ)</label>
+                    <input required type="number" placeholder="5000000" value={bankForm.amount} onChange={e => setBankForm({...bankForm, amount: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-sm font-extrabold text-purple-700 outline-none border-purple-200 focus:border-purple-600" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Ngân Hàng</label>
+                      <select value={bankForm.bank} onChange={e => setBankForm({...bankForm, bank: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs font-medium">
+                        <option value="MB Bank">MB Bank</option>
+                        <option value="Vietcombank">Vietcombank</option>
+                        <option value="BIDV">BIDV</option>
+                        <option value="Agribank">Agribank</option>
+                        <option value="Vietinbank">Vietinbank</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Ngày Nộp</label>
+                      <input type="date" value={bankForm.date} onChange={e => setBankForm({...bankForm, date: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Ghi Chú</label>
+                    <input type="text" placeholder="Nộp doanh thu tuần 1" value={bankForm.note} onChange={e => setBankForm({...bankForm, note: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                  </div>
+                  <button type="submit" className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-lg text-xs transition">XÁC NHẬN NỘP TIỀN</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL BÁO CÁO DOANH THU */}
+          {showReportModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-3xl w-full max-w-xl p-6 shadow-2xl space-y-4">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900"><i className="fa-solid fa-chart-pie text-amber-500 mr-2"></i> Báo Cáo Doanh Thu Chi Tiết</h3>
+                  <button onClick={() => setShowReportModal(false)} className="text-slate-400 font-bold hover:text-slate-600">✕</button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl border">
+                    <span className="text-slate-500 block">Tổng doanh thu hệ thống</span>
+                    <span className="text-base font-black text-blue-600">{stats.totalRev.toLocaleString()} đ</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border">
+                    <span className="text-slate-500 block">Tổng đã nộp ngân hàng</span>
+                    <span className="text-base font-black text-emerald-600">{stats.totalBankPaid.toLocaleString()} đ</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="font-bold text-slate-700">Chi tiết theo loại dịch vụ:</div>
+                  <div className="flex justify-between p-2.5 bg-blue-50/50 rounded-xl border border-blue-100">
+                    <span>📱 Dịch vụ SIM ({stats.simCount} GD)</span>
+                    <span className="font-bold">{stats.simRev.toLocaleString()} đ</span>
+                  </div>
+                  <div className="flex justify-between p-2.5 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                    <span>🌐 Dịch vụ Fiber ({stats.fiberCount} GD)</span>
+                    <span className="font-bold">{stats.fiberRev.toLocaleString()} đ</span>
+                  </div>
+                  <div className="flex justify-between p-2.5 bg-amber-50/50 rounded-xl border border-amber-100">
+                    <span>🔄 Dịch vụ Gia Hạn ({stats.renewalCount} GD)</span>
+                    <span className="font-bold">{stats.renewalRev.toLocaleString()} đ</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex justify-between items-center text-xs">
+                  <span className="font-bold text-rose-800">Số tiền hiện còn giữ lại:</span>
+                  <span className="text-sm font-black text-rose-600">{stats.remaining.toLocaleString()} đ</span>
+                </div>
+
+                <button onClick={() => setShowReportModal(false)} className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs">ĐÓNG BÁO CÁO</button>
+              </div>
+            </div>
+          )}
 
           {/* MODAL THÊM GIAO DỊCH */}
           {showTxModal && (
@@ -559,36 +662,9 @@
               <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-4">
                 <div className="flex justify-between items-center border-b pb-3">
                   <h3 className="text-sm font-black text-slate-900">➕ Thêm Giao Dịch Mới</h3>
-                  <button onClick={() => setShowTxModal(false)} className="text-slate-400 font-bold text-lg hover:text-slate-600">✕</button>
+                  <button onClick={() => setShowTxModal(false)} className="text-slate-400 font-bold hover:text-slate-600">✕</button>
                 </div>
                 <form onSubmit={handleSaveTx} className="space-y-3">
-                  {pkgs.length > 0 && (
-                    <div>
-                      <label className="text-[10px] font-extrabold text-blue-700 tracking-wide uppercase">Chọn gói cước mẫu (Tự động điền giá)</label>
-                      <select onChange={e => handleSelectPkg(e.target.value)} className="w-full mt-1 border-2 border-blue-200 rounded-xl p-2 text-xs font-bold bg-blue-50/50 outline-none">
-                        <option value="">-- Chọn gói cước sẵn có --</option>
-                        {pkgs.map(p => (
-                          <option key={p.id} value={p.id}>[{p.service}] {p.name} - {(p.price || 0).toLocaleString()}đ ({p.months}T)</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Loại Giao Dịch</label>
-                      <select value={txForm.type} onChange={e => setTxForm({...txForm, type: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs font-medium">
-                        <option value="Phát triển mới">Phát triển mới</option>
-                        <option value="Gia hạn">Gia hạn</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Loại Dịch Vụ</label>
-                      <select value={txForm.service} onChange={e => setTxForm({...txForm, service: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs font-medium">
-                        <option value="SIM">SIM</option>
-                        <option value="Fiber">Fiber (Internet)</option>
-                      </select>
-                    </div>
-                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-bold text-slate-600">Khách Hàng</label>
