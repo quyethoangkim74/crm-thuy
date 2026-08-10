@@ -37,14 +37,16 @@
       const [pinInput, setPinInput] = useState('');
       const [pinError, setPinError] = useState('');
 
-      // State chọn tháng (Mặc định chọn tháng hiện tại YYYY-MM)
+      // State chọn tháng (YYYY-MM)
       const [selectedMonth, setSelectedMonth] = useState(() => {
         const now = new Date();
         const m = String(now.getMonth() + 1).padStart(2, '0');
         return `${now.getFullYear()}-${m}`;
       });
 
-      const [activeNav, setActiveNav] = useState('dashboard');
+      // Tab chuyển đổi: 'dashboard' hoặc 'packages'
+      const [activeTab, setActiveTab] = useState('dashboard');
+
       const [txs, setTxs] = useState([]);
       const [pkgs, setPkgs] = useState([]);
       const [bankLogs, setBankLogs] = useState([]);
@@ -116,7 +118,7 @@
         setIsAuthenticated(false);
       };
 
-      // LỌC DỮ LIỆU THEO THÁNG ĐƯỢC CHỌN
+      // LỌC DỮ LIỆU THEO THÁNG
       const filteredTxs = useMemo(() => {
         return txs.filter(t => t.startDate && t.startDate.startsWith(selectedMonth));
       }, [txs, selectedMonth]);
@@ -172,9 +174,6 @@
         };
       }, [filteredTxs, filteredBankLogs]);
 
-      const targetRev = 25000000;
-      const targetPercent = Math.min(Math.round((stats.totalRev / targetRev) * 100), 100);
-
       const upcomingExpirations = useMemo(() => {
         const today = new Date();
         return txs.map(t => {
@@ -188,7 +187,7 @@
       }, [txs]);
 
       useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated || activeTab !== 'dashboard') return;
 
         if (barChartRef.current) {
           if (barChartInstance.current) barChartInstance.current.destroy();
@@ -250,9 +249,9 @@
             }
           });
         }
-      }, [isAuthenticated, filteredTxs, stats]);
+      }, [isAuthenticated, activeTab, filteredTxs, stats]);
 
-      // --- THÊM / SỬA / XÓA GIAO DỊCH ---
+      // GIAO DỊCH
       const handleOpenCreateTx = () => {
         setEditingTx(null);
         setTxForm({ type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0] });
@@ -318,7 +317,7 @@
         else setTxs(txs.filter(t => t.id !== id));
       };
 
-      // --- THÊM / SỬA / XÓA GÓI CƯỚC ---
+      // GÓI CƯỚC
       const handleOpenCreatePkg = () => {
         setEditingPkg(null);
         setPkgForm({ name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '' });
@@ -371,7 +370,7 @@
         else setPkgs(pkgs.filter(p => p.id !== id));
       };
 
-      // --- NỘP TIỀN NGÂN HÀNG ---
+      // NỘP TIỀN
       const handleSaveBank = async (e) => {
         e.preventDefault();
         const payload = {
@@ -428,6 +427,7 @@
 
       return (
         <div className="flex flex-col md:flex-row min-h-screen bg-[#f3f4f6]">
+          {/* SIDEBAR BÊN TRÁI */}
           <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col justify-between p-4 shrink-0 h-screen sticky top-0">
             <div>
               <div className="flex items-center gap-3 px-2 mb-6">
@@ -440,59 +440,43 @@
                 </div>
               </div>
 
-              <nav className="space-y-1">
-                <button onClick={() => setActiveNav('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition ${activeNav === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100'}`}>
-                  <i className="fa-solid fa-table-cells-large text-sm"></i> Dashboard
+              <nav className="space-y-1.5">
+                <button 
+                  onClick={() => setActiveTab('dashboard')} 
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-xs transition ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <i className="fa-solid fa-table-cells-large text-sm"></i> Trang chủ
                 </button>
-                <button onClick={handleOpenCreatePkg} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100 transition`}>
-                  <i className="fa-solid fa-box text-sm"></i> Tạo Gói Cước
+
+                <button 
+                  onClick={() => setActiveTab('packages')} 
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition ${activeTab === 'packages' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <i className="fa-solid fa-box text-sm"></i> Danh sách Gói Cước
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'packages' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}`}>{pkgs.length}</span>
                 </button>
               </nav>
-
-              <div className="mt-6 bg-gradient-to-br from-blue-50 to-blue-100/60 p-4 rounded-2xl border border-blue-100 space-y-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-blue-900">Mục tiêu tháng</span>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500">Doanh thu chỉ tiêu</div>
-                  <div className="text-base font-black text-blue-900">25.000.000 đ</div>
-                  <div className="text-[10px] text-slate-500 mt-1">Đã đạt: <strong>{stats.totalRev.toLocaleString()} đ</strong></div>
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                    <div className="bg-blue-600 h-full rounded-full transition-all duration-500" style={{width: `${targetPercent}%`}}></div>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-1 border-t border-blue-200/50 text-[11px]">
-                  <div>
-                    <div className="flex justify-between text-slate-600 mb-0.5"><span>SIM mới</span><span className="font-bold text-slate-800">{stats.simCount} / 50</span></div>
-                    <div className="w-full bg-slate-200 h-1 rounded-full"><div className="bg-blue-600 h-full rounded-full" style={{width: `${Math.min((stats.simCount/50)*100, 100)}%`}}></div></div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-slate-600 mb-0.5"><span>Fiber mới</span><span className="font-bold text-slate-800">{stats.fiberCount} / 20</span></div>
-                    <div className="w-full bg-slate-200 h-1 rounded-full"><div className="bg-blue-600 h-full rounded-full" style={{width: `${Math.min((stats.fiberCount/20)*100, 100)}%`}}></div></div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-slate-600 mb-0.5"><span>Gia hạn</span><span className="font-bold text-slate-800">{stats.renewalCount} / 40</span></div>
-                    <div className="w-full bg-slate-200 h-1 rounded-full"><div className="bg-blue-600 h-full rounded-full" style={{width: `${Math.min((stats.renewalCount/40)*100, 100)}%`}}></div></div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="space-y-2 border-t pt-3">
-              <button onClick={handleLogout} className="w-full text-left text-xs font-bold text-rose-600 hover:bg-rose-50 p-2 rounded-xl transition flex items-center gap-2">
+              <button onClick={handleLogout} className="w-full text-left text-xs font-bold text-rose-600 hover:bg-rose-50 p-2.5 rounded-xl transition flex items-center gap-2">
                 <i className="fa-solid fa-right-from-bracket"></i> Khóa ứng dụng
               </button>
             </div>
           </aside>
 
+          {/* NỘI DUNG CHÍNH */}
           <div className="flex-1 flex flex-col min-w-0">
             <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex md:hidden items-center justify-center text-white font-bold text-xs">
                   <i className="fa-solid fa-paper-plane"></i>
                 </div>
-                <h2 className="text-base md:text-lg font-bold text-slate-800">Dashboard</h2>
+                <h2 className="text-base md:text-lg font-bold text-slate-800">
+                  {activeTab === 'dashboard' ? 'Trang chủ Dashboard' : 'Quản lý Gói Cước'}
+                </h2>
               </div>
               <div className="flex items-center gap-2 md:gap-4">
                 {loading && <span className="text-[10px] md:text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg"><i className="fa-solid fa-spin fa-spinner"></i></span>}
@@ -500,288 +484,302 @@
                   <i className="fa-solid fa-right-from-bracket"></i>
                 </button>
                 
-                {/* BỘ CHỌN THÁNG - LỌC DỮ LIỆU TỰ ĐỘNG */}
-                <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
-                  <i className="fa-regular fa-calendar text-blue-600"></i>
-                  <input
-                    type="month"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="bg-transparent border-none outline-none text-xs font-bold cursor-pointer text-slate-800"
-                  />
-                </div>
+                {/* BỘ CHỌN THÁNG */}
+                {activeTab === 'dashboard' && (
+                  <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+                    <i className="fa-regular fa-calendar text-blue-600"></i>
+                    <input
+                      type="month"
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="bg-transparent border-none outline-none text-xs font-bold cursor-pointer text-slate-800"
+                    />
+                  </div>
+                )}
               </div>
             </header>
 
             <main className="p-3 md:p-6 space-y-4 md:space-y-5 overflow-y-auto custom-scrollbar">
-              <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 md:gap-3">
-                <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-slate-400">Tổng doanh thu</span>
-                    <div className="w-6 h-6 md:w-8 md:h-8 bg-blue-600 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-wallet"></i></div>
-                  </div>
-                  <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.totalRev.toLocaleString()} đ</span>
-                  <span className="text-[9px] font-bold text-emerald-600 mt-1"><i className="fa-solid fa-arrow-up"></i> {targetPercent}% chỉ tiêu</span>
-                </div>
-
-                <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-slate-400">SIM mới</span>
-                    <div className="w-6 h-6 md:w-8 md:h-8 bg-emerald-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-sim-card"></i></div>
-                  </div>
-                  <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.simCount} TB</span>
-                  <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.simRev.toLocaleString()} đ</span>
-                </div>
-
-                <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-slate-400">Fiber mới</span>
-                    <div className="w-6 h-6 md:w-8 md:h-8 bg-purple-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-wifi"></i></div>
-                  </div>
-                  <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.fiberCount} HĐ</span>
-                  <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.fiberRev.toLocaleString()} đ</span>
-                </div>
-
-                <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-slate-400">Gia hạn</span>
-                    <div className="w-6 h-6 md:w-8 md:h-8 bg-amber-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-rotate-right"></i></div>
-                  </div>
-                  <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.renewalCount} GD</span>
-                  <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.renewalRev.toLocaleString()} đ</span>
-                </div>
-
-                <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-slate-400">Đã nộp NH</span>
-                    <div className="w-6 h-6 md:w-8 md:h-8 bg-teal-600 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-building-columns"></i></div>
-                  </div>
-                  <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.totalBankPaid.toLocaleString()} đ</span>
-                  <span className="text-[9px] text-slate-400 mt-1">{filteredBankLogs.length} lần nộp</span>
-                </div>
-
-                <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-slate-400">Chưa nộp</span>
-                    <div className="w-6 h-6 md:w-8 md:h-8 bg-rose-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-money-bill-wave"></i></div>
-                  </div>
-                  <span className="text-xs md:text-sm font-black text-rose-600 block">{stats.remaining.toLocaleString()} đ</span>
-                  <span className="text-[9px] text-slate-400 mt-1">Còn giữ lại</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 md:gap-3">
-                <button onClick={handleOpenCreateTx} className="bg-blue-600 active:bg-blue-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
-                  <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-plus"></i></div>
-                  <div className="text-left overflow-hidden">
-                    <div className="font-bold text-xs truncate">Tạo giao dịch</div>
-                    <div className="text-[9px] opacity-80 hidden md:block">Lưu dữ liệu</div>
-                  </div>
-                </button>
-
-                <button onClick={handleOpenCreatePkg} className="bg-indigo-600 active:bg-indigo-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
-                  <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-box"></i></div>
-                  <div className="text-left overflow-hidden">
-                    <div className="font-bold text-xs truncate">Tạo gói cước</div>
-                    <div className="text-[9px] opacity-80 hidden md:block">DS gói cước ({pkgs.length})</div>
-                  </div>
-                </button>
-
-                <button onClick={handleOpenCreateTx} className="bg-emerald-600 active:bg-emerald-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
-                  <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-user-plus"></i></div>
-                  <div className="text-left overflow-hidden">
-                    <div className="font-bold text-xs truncate">Thêm khách</div>
-                    <div className="text-[9px] opacity-80 hidden md:block">Cập nhật DS</div>
-                  </div>
-                </button>
-
-                <button onClick={() => setShowBankModal(true)} className="bg-purple-600 active:bg-purple-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
-                  <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-wallet"></i></div>
-                  <div className="text-left overflow-hidden">
-                    <div className="font-bold text-xs truncate">Nộp tiền NH</div>
-                    <div className="text-[9px] opacity-80 hidden md:block">Cập nhật số dư</div>
-                  </div>
-                </button>
-
-                <button onClick={() => setShowReportModal(true)} className="bg-amber-500 active:bg-amber-600 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition col-span-2 md:col-span-1">
-                  <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-chart-pie"></i></div>
-                  <div className="text-left overflow-hidden">
-                    <div className="font-bold text-xs truncate">Báo cáo DT</div>
-                    <div className="text-[9px] opacity-80 hidden md:block">Xem tổng hợp</div>
-                  </div>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
-                <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <h3 className="font-bold text-xs text-slate-800">Doanh thu theo ngày ({selectedMonth})</h3>
-                  <div className="h-40 md:h-44 w-full relative"><canvas ref={barChartRef}></canvas></div>
-                </div>
-
-                <div className="md:col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <h3 className="font-bold text-xs text-slate-800">Tỷ lệ dịch vụ ({selectedMonth})</h3>
-                  <div className="flex items-center justify-around gap-2">
-                    <div className="w-28 h-28 md:w-32 md:h-36 relative flex items-center justify-center shrink-0">
-                      <canvas ref={doughnutChartRef}></canvas>
-                    </div>
-                    <div className="space-y-2 text-[10px]">
-                      <div><span className="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1.5"></span><span className="font-bold">SIM:</span> {stats.simRev.toLocaleString()}đ</div>
-                      <div><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span><span className="font-bold">Fiber:</span> {stats.fiberRev.toLocaleString()}đ</div>
-                      <div><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span><span className="font-bold">Gia hạn:</span> {stats.renewalRev.toLocaleString()}đ</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="md:col-span-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <h3 className="font-bold text-xs text-slate-800">Khách sắp đến hạn</h3>
-                  <div className="space-y-2 text-xs">
-                    {upcomingExpirations.map(item => (
-                      <div key={item.id} className="flex items-center justify-between border-b pb-1">
-                        <div>
-                          <div className="text-[11px] font-bold text-slate-800">{item.customer}</div>
-                          <div className="text-[9px] text-slate-400">{item.phone}</div>
-                        </div>
-                        <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-md">Còn {item.diffDays} ngày</span>
+              
+              {/* TAB 1: TRANG CHỦ (DASHBOARD) */}
+              {activeTab === 'dashboard' && (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 md:gap-3">
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Tổng doanh thu</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-blue-600 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-wallet"></i></div>
                       </div>
-                    ))}
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.totalRev.toLocaleString()} đ</span>
+                      <span className="text-[9px] font-bold text-blue-600 mt-1">Tháng {selectedMonth}</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">SIM mới</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-emerald-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-sim-card"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.simCount} TB</span>
+                      <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.simRev.toLocaleString()} đ</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Fiber mới</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-purple-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-wifi"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.fiberCount} HĐ</span>
+                      <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.fiberRev.toLocaleString()} đ</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Gia hạn</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-amber-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-rotate-right"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.renewalCount} GD</span>
+                      <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.renewalRev.toLocaleString()} đ</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Đã nộp NH</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-teal-600 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-building-columns"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.totalBankPaid.toLocaleString()} đ</span>
+                      <span className="text-[9px] text-slate-400 mt-1">{filteredBankLogs.length} lần nộp</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Chưa nộp</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-rose-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-money-bill-wave"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-rose-600 block">{stats.remaining.toLocaleString()} đ</span>
+                      <span className="text-[9px] text-slate-400 mt-1">Còn giữ lại</span>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* BẢNG DANH SÁCH GÓI CƯỚC */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-xs text-slate-800"><i className="fa-solid fa-box text-indigo-600 mr-1.5"></i> Danh sách Gói Cước ({pkgs.length})</h3>
-                  <button onClick={handleOpenCreatePkg} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg">
-                    <i className="fa-solid fa-plus mr-1"></i> Tạo Gói
-                  </button>
-                </div>
-                <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left text-[11px] min-w-[500px]">
-                    <thead className="bg-slate-50 text-slate-400 border-b">
-                      <tr>
-                        <th className="p-2">Tên Gói</th>
-                        <th className="p-2">Dịch Vụ</th>
-                        <th className="p-2">Chu Kỳ</th>
-                        <th className="p-2">Giá Tiền</th>
-                        <th className="p-2 text-center">Thao Tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium">
-                      {pkgs.map(p => (
-                        <tr key={p.id}>
-                          <td className="p-2 font-bold text-indigo-600 whitespace-nowrap">{p.name}</td>
-                          <td className="p-2 whitespace-nowrap">{p.service}</td>
-                          <td className="p-2 whitespace-nowrap">{p.months} tháng {p.bonusMonths ? `(+${p.bonusMonths}T KM)` : ''}</td>
-                          <td className="p-2 font-bold whitespace-nowrap">{(p.price || 0).toLocaleString()} đ</td>
-                          <td className="p-2 text-center whitespace-nowrap">
-                            <button onClick={() => handleOpenEditPkg(p)} className="p-1 px-2 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
-                              <i className="fa-solid fa-pen-to-square"></i> Sửa
-                            </button>
-                            <button onClick={() => handleDeletePkg(p.id)} className="p-1 px-2 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
-                              <i className="fa-solid fa-trash"></i> Xóa
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {pkgs.length === 0 && (
-                        <tr><td colSpan="5" className="p-3 text-center text-slate-400">Chưa có gói cước nào</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
+                    <button onClick={handleOpenCreateTx} className="bg-blue-600 active:bg-blue-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-plus"></i></div>
+                      <div className="text-left overflow-hidden">
+                        <div className="font-bold text-xs truncate">Tạo giao dịch</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Lưu dữ liệu</div>
+                      </div>
+                    </button>
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
-                {/* BẢNG GIAO DỊCH - LỌC THEO THÁNG */}
-                <div className="md:col-span-8 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-bold text-xs text-slate-800">Giao dịch trong tháng {selectedMonth} ({filteredTxs.length})</h3>
-                    <button onClick={handleOpenCreateTx} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg">
-                      <i className="fa-solid fa-plus mr-1"></i> Thêm GD
+                    <button onClick={handleOpenCreatePkg} className="bg-indigo-600 active:bg-indigo-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-box"></i></div>
+                      <div className="text-left overflow-hidden">
+                        <div className="font-bold text-xs truncate">Tạo gói cước</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Thêm vào hệ thống</div>
+                      </div>
+                    </button>
+
+                    <button onClick={() => setShowBankModal(true)} className="bg-purple-600 active:bg-purple-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-wallet"></i></div>
+                      <div className="text-left overflow-hidden">
+                        <div className="font-bold text-xs truncate">Nộp tiền NH</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Cập nhật số dư</div>
+                      </div>
+                    </button>
+
+                    <button onClick={() => setShowReportModal(true)} className="bg-amber-500 active:bg-amber-600 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-chart-pie"></i></div>
+                      <div className="text-left overflow-hidden">
+                        <div className="font-bold text-xs truncate">Báo cáo DT</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Xem tổng hợp</div>
+                      </div>
                     </button>
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
+                    <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <h3 className="font-bold text-xs text-slate-800">Doanh thu theo ngày ({selectedMonth})</h3>
+                      <div className="h-40 md:h-44 w-full relative"><canvas ref={barChartRef}></canvas></div>
+                    </div>
+
+                    <div className="md:col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <h3 className="font-bold text-xs text-slate-800">Tỷ lệ dịch vụ ({selectedMonth})</h3>
+                      <div className="flex items-center justify-around gap-2">
+                        <div className="w-28 h-28 md:w-32 md:h-36 relative flex items-center justify-center shrink-0">
+                          <canvas ref={doughnutChartRef}></canvas>
+                        </div>
+                        <div className="space-y-2 text-[10px]">
+                          <div><span className="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1.5"></span><span className="font-bold">SIM:</span> {stats.simRev.toLocaleString()}đ</div>
+                          <div><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span><span className="font-bold">Fiber:</span> {stats.fiberRev.toLocaleString()}đ</div>
+                          <div><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span><span className="font-bold">Gia hạn:</span> {stats.renewalRev.toLocaleString()}đ</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <h3 className="font-bold text-xs text-slate-800">Khách sắp đến hạn</h3>
+                      <div className="space-y-2 text-xs">
+                        {upcomingExpirations.map(item => (
+                          <div key={item.id} className="flex items-center justify-between border-b pb-1">
+                            <div>
+                              <div className="text-[11px] font-bold text-slate-800">{item.customer}</div>
+                              <div className="text-[9px] text-slate-400">{item.phone}</div>
+                            </div>
+                            <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-md">Còn {item.diffDays} ngày</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
+                    {/* BẢNG GIAO DỊCH */}
+                    <div className="md:col-span-8 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-xs text-slate-800">Giao dịch trong tháng {selectedMonth} ({filteredTxs.length})</h3>
+                        <button onClick={handleOpenCreateTx} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg">
+                          <i className="fa-solid fa-plus mr-1"></i> Thêm GD
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-[11px] min-w-[550px]">
+                          <thead className="bg-slate-50 text-slate-400 border-b">
+                            <tr>
+                              <th className="p-2">Ngày GD</th>
+                              <th className="p-2">Khách hàng</th>
+                              <th className="p-2">SĐT</th>
+                              <th className="p-2">Gói cước</th>
+                              <th className="p-2">Số tiền</th>
+                              <th className="p-2 text-center">Thao tác</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium">
+                            {filteredTxs.map(t => (
+                              <tr key={t.id}>
+                                <td className="p-2 whitespace-nowrap">{t.startDate}</td>
+                                <td className="p-2 font-bold whitespace-nowrap">{t.customer}</td>
+                                <td className="p-2 whitespace-nowrap">{t.phone}</td>
+                                <td className="p-2 text-blue-600 font-bold whitespace-nowrap">{t.packageName}</td>
+                                <td className="p-2 font-black whitespace-nowrap">{(t.amount || 0).toLocaleString()} đ</td>
+                                <td className="p-2 text-center whitespace-nowrap">
+                                  <button onClick={() => handleOpenEditTx(t)} className="p-1 px-2 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
+                                    <i className="fa-solid fa-pen-to-square"></i>
+                                  </button>
+                                  <button onClick={() => handleDeleteTx(t.id)} className="p-1 px-2 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
+                                    <i className="fa-solid fa-trash"></i>
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {filteredTxs.length === 0 && (
+                              <tr><td colSpan="6" className="p-3 text-center text-slate-400">Không có giao dịch nào trong tháng {selectedMonth}</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* BẢNG LỊCH SỬ NỘP TIỀN */}
+                    <div className="md:col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <h3 className="font-bold text-xs text-slate-800">Nộp tiền NH tháng {selectedMonth}</h3>
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-slate-50 text-slate-400 border-b">
+                            <tr>
+                              <th className="p-2">Ngày</th>
+                              <th className="p-2">Số tiền</th>
+                              <th className="p-2">Ngân hàng</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium">
+                            {filteredBankLogs.map(item => (
+                              <tr key={item.id}>
+                                <td className="p-2 whitespace-nowrap">{item.date}</td>
+                                <td className="p-2 font-bold text-emerald-600 whitespace-nowrap">{item.amount.toLocaleString()} đ</td>
+                                <td className="p-2 text-slate-700 font-bold whitespace-nowrap">{item.bank}</td>
+                              </tr>
+                            ))}
+                            {filteredBankLogs.length === 0 && (
+                              <tr><td colSpan="3" className="p-3 text-center text-slate-400">Chưa nộp tiền tháng này</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* TAB 2: QUẢN LÝ TÊN GÓI CƯỚC (RIÊNG BIỆT) */}
+              {activeTab === 'packages' && (
+                <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center border-b pb-3">
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900"><i className="fa-solid fa-box text-indigo-600 mr-2"></i> Danh Sách Tên Gói Cước ({pkgs.length})</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Quản lý các gói cước SIM, Fiber, MyTV được phép chọn khi lên giao dịch mới</p>
+                    </div>
+                    <button onClick={handleOpenCreatePkg} className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3.5 py-2 rounded-xl shadow-md shadow-indigo-600/20 transition">
+                      <i className="fa-solid fa-plus mr-1.5"></i> Tạo Gói Mới
+                    </button>
+                  </div>
+
                   <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left text-[11px] min-w-[550px]">
+                    <table className="w-full text-left text-xs min-w-[600px]">
                       <thead className="bg-slate-50 text-slate-400 border-b">
                         <tr>
-                          <th className="p-2">Ngày GD</th>
-                          <th className="p-2">Khách hàng</th>
-                          <th className="p-2">SĐT</th>
-                          <th className="p-2">Gói cước</th>
-                          <th className="p-2">Số tiền</th>
-                          <th className="p-2 text-center">Thao tác</th>
+                          <th className="p-3">Tên Gói</th>
+                          <th className="p-3">Dịch Vụ</th>
+                          <th className="p-3">Chu Kỳ Chuẩn</th>
+                          <th className="p-3">Khuyến Mãi</th>
+                          <th className="p-3">Giá Gói</th>
+                          <th className="p-3 text-center">Thao Tác</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
-                        {filteredTxs.map(t => (
-                          <tr key={t.id}>
-                            <td className="p-2 whitespace-nowrap">{t.startDate}</td>
-                            <td className="p-2 font-bold whitespace-nowrap">{t.customer}</td>
-                            <td className="p-2 whitespace-nowrap">{t.phone}</td>
-                            <td className="p-2 text-blue-600 font-bold whitespace-nowrap">{t.packageName}</td>
-                            <td className="p-2 font-black whitespace-nowrap">{(t.amount || 0).toLocaleString()} đ</td>
-                            <td className="p-2 text-center whitespace-nowrap">
-                              <button onClick={() => handleOpenEditTx(t)} className="p-1 px-2 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
-                                <i className="fa-solid fa-pen-to-square"></i>
+                        {pkgs.map(p => (
+                          <tr key={p.id} className="hover:bg-slate-50/50">
+                            <td className="p-3 font-bold text-indigo-600 whitespace-nowrap">{p.name}</td>
+                            <td className="p-3 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${p.service === 'SIM' ? 'bg-blue-50 text-blue-600' : p.service === 'Fiber' ? 'bg-purple-50 text-purple-600' : 'bg-amber-50 text-amber-600'}`}>
+                                {p.service}
+                              </span>
+                            </td>
+                            <td className="p-3 whitespace-nowrap">{p.months} tháng</td>
+                            <td className="p-3 whitespace-nowrap text-emerald-600 font-bold">{p.bonusMonths ? `+${p.bonusMonths} tháng` : 'Không'}</td>
+                            <td className="p-3 font-black text-slate-900 whitespace-nowrap">{(p.price || 0).toLocaleString()} đ</td>
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <button onClick={() => handleOpenEditPkg(p)} className="p-1.5 px-2.5 text-blue-600 hover:bg-blue-50 rounded-lg mr-1 font-bold">
+                                <i className="fa-solid fa-pen-to-square mr-1"></i> Sửa
                               </button>
-                              <button onClick={() => handleDeleteTx(t.id)} className="p-1 px-2 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
-                                <i className="fa-solid fa-trash"></i>
+                              <button onClick={() => handleDeletePkg(p.id)} className="p-1.5 px-2.5 text-rose-600 hover:bg-rose-50 rounded-lg font-bold">
+                                <i className="fa-solid fa-trash mr-1"></i> Xóa
                               </button>
                             </td>
                           </tr>
                         ))}
-                        {filteredTxs.length === 0 && (
-                          <tr><td colSpan="6" className="p-3 text-center text-slate-400">Không có giao dịch nào trong tháng {selectedMonth}</td></tr>
+                        {pkgs.length === 0 && (
+                          <tr><td colSpan="6" className="p-6 text-center text-slate-400 font-medium">Chưa có gói cước nào. Bấm "Tạo Gói Mới" để thêm!</td></tr>
                         )}
                       </tbody>
                     </table>
                   </div>
                 </div>
+              )}
 
-                {/* BẢNG LỊCH SỬ NỘP TIỀN - LỌC THEO THÁNG */}
-                <div className="md:col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                  <h3 className="font-bold text-xs text-slate-800">Nộp tiền NH tháng {selectedMonth}</h3>
-                  <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left text-[11px]">
-                      <thead className="bg-slate-50 text-slate-400 border-b">
-                        <tr>
-                          <th className="p-2">Ngày</th>
-                          <th className="p-2">Số tiền</th>
-                          <th className="p-2">Ngân hàng</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium">
-                        {filteredBankLogs.map(item => (
-                          <tr key={item.id}>
-                            <td className="p-2 whitespace-nowrap">{item.date}</td>
-                            <td className="p-2 font-bold text-emerald-600 whitespace-nowrap">{item.amount.toLocaleString()} đ</td>
-                            <td className="p-2 text-slate-700 font-bold whitespace-nowrap">{item.bank}</td>
-                          </tr>
-                        ))}
-                        {filteredBankLogs.length === 0 && (
-                          <tr><td colSpan="3" className="p-3 text-center text-slate-400">Chưa nộp tiền tháng này</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
             </main>
           </div>
 
+          {/* MENUBAR MOBILE */}
           <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around py-2 px-3 z-30 shadow-lg">
-            <button onClick={() => setActiveNav('dashboard')} className={`flex flex-col items-center gap-1 ${activeNav === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
+            <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
               <i className="fa-solid fa-table-cells-large text-base"></i>
-              <span className="text-[10px] font-bold">Tổng quan</span>
+              <span className="text-[10px] font-bold">Trang chủ</span>
+            </button>
+            <button onClick={() => setActiveTab('packages')} className={`flex flex-col items-center gap-1 ${activeTab === 'packages' ? 'text-indigo-600' : 'text-slate-400'}`}>
+              <i className="fa-solid fa-box text-base"></i>
+              <span className="text-[10px] font-bold">Tên Gói</span>
             </button>
             <button onClick={handleOpenCreateTx} className="flex flex-col items-center gap-1 text-slate-400">
               <i className="fa-solid fa-circle-plus text-base text-blue-600"></i>
               <span className="text-[10px] font-bold text-slate-700">Tạo GD</span>
-            </button>
-            <button onClick={handleOpenCreatePkg} className="flex flex-col items-center gap-1 text-slate-400">
-              <i className="fa-solid fa-box text-base text-indigo-600"></i>
-              <span className="text-[10px] font-bold text-slate-700">Tạo Gói</span>
             </button>
             <button onClick={() => setShowReportModal(true)} className="flex flex-col items-center gap-1 text-slate-400">
               <i className="fa-solid fa-chart-pie text-base"></i>
