@@ -10,6 +10,8 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Thư viện xuất file Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -30,7 +32,6 @@
 
     const CORRECT_PIN = '1234';
 
-    // Hàm tiện ích format tiền tệ
     const formatCurrencyInput = (value) => {
       if (value === null || value === undefined || value === '') return '';
       const rawValue = value.toString().replace(/\D/g, '');
@@ -56,6 +57,7 @@
       });
 
       const [activeTab, setActiveTab] = useState('dashboard');
+      const [searchQuery, setSearchQuery] = useState('');
 
       const [txs, setTxs] = useState([]);
       const [pkgs, setPkgs] = useState([]);
@@ -129,13 +131,56 @@
         setIsAuthenticated(false);
       };
 
+      // Tìm kiếm và Lọc giao dịch
       const filteredTxs = useMemo(() => {
-        return txs.filter(t => t.startDate && t.startDate.startsWith(selectedMonth));
-      }, [txs, selectedMonth]);
+        return txs.filter(t => {
+          const matchesMonth = t.startDate && t.startDate.startsWith(selectedMonth);
+          const q = searchQuery.toLowerCase().trim();
+          const matchesSearch = !q || 
+            (t.customer && t.customer.toLowerCase().includes(q)) ||
+            (t.phone && t.phone.includes(q)) ||
+            (t.packageName && t.packageName.toLowerCase().includes(q));
+          return matchesMonth && matchesSearch;
+        });
+      }, [txs, selectedMonth, searchQuery]);
 
       const filteredBankLogs = useMemo(() => {
         return bankLogs.filter(b => b.date && b.date.startsWith(selectedMonth));
       }, [bankLogs, selectedMonth]);
+
+      // Copy tin nhắn gia hạn mẫu
+      const handleCopyReminder = (item) => {
+        const text = `VNPT xin thông báo: Gói cước ${item.packageName || 'dịch vụ'} của Quý khách (${item.customer}) sẽ hết hạn vào ngày ${item.expireDate || 'tới'}. Quý khách vui lòng liên hệ em để gia hạn tiếp tục sử dụng dịch vụ nhé!`;
+        navigator.clipboard.writeText(text);
+        alert(`Đã sao chép tin nhắn mẫu cho KH ${item.customer}!\n\nNội dung: "${text}"`);
+      };
+
+      // Xuất Excel
+      const handleExportExcel = () => {
+        if (filteredTxs.length === 0) {
+          alert('Không có dữ liệu giao dịch trong tháng này để xuất Excel!');
+          return;
+        }
+
+        const dataToExport = filteredTxs.map((t, idx) => ({
+          'STT': idx + 1,
+          'Ngày GD': t.startDate,
+          'Khách Hàng': t.customer,
+          'Số Điện Thoại': t.phone,
+          'Dịch Vụ': t.service,
+          'Loại GD': t.type,
+          'Gói Cước': t.packageName,
+          'Chu Kỳ (Tháng)': t.months,
+          'Tháng KM': t.bonusMonths,
+          'Số Tiền (VNĐ)': t.amount,
+          'Ngày Hết Hạn': t.expireDate || ''
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, `GiaoDich_${selectedMonth}`);
+        XLSX.writeFile(workbook, `BaoCao_GiaoDich_VNPT_${selectedMonth}.xlsx`);
+      };
 
       const handleSelectPackage = (e) => {
         const selectedName = e.target.value;
@@ -159,11 +204,12 @@
       };
 
       const stats = useMemo(() => {
-        const simTxs = filteredTxs.filter(t => t.service === 'SIM');
-        const fiberTxs = filteredTxs.filter(t => t.service === 'Fiber');
-        const renewalTxs = filteredTxs.filter(t => t.type === 'Gia hạn');
+        const currentMonthTxs = txs.filter(t => t.startDate && t.startDate.startsWith(selectedMonth));
+        const simTxs = currentMonthTxs.filter(t => t.service === 'SIM');
+        const fiberTxs = currentMonthTxs.filter(t => t.service === 'Fiber');
+        const renewalTxs = currentMonthTxs.filter(t => t.type === 'Gia hạn');
 
-        const totalRev = filteredTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        const totalRev = currentMonthTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
         const simRev = simTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
         const fiberRev = fiberTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
         const renewalRev = renewalTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -182,7 +228,7 @@
           totalBankPaid,
           remaining: remaining > 0 ? remaining : 0
         };
-      }, [filteredTxs, filteredBankLogs]);
+      }, [txs, filteredBankLogs, selectedMonth]);
 
       const upcomingExpirations = useMemo(() => {
         const today = new Date();
@@ -203,7 +249,8 @@
           if (barChartInstance.current) barChartInstance.current.destroy();
           
           const daysMap = {};
-          filteredTxs.forEach(t => {
+          const currentMonthTxs = txs.filter(t => t.startDate && t.startDate.startsWith(selectedMonth));
+          currentMonthTxs.forEach(t => {
             if (t.startDate) {
               const parts = t.startDate.split('-');
               const dayNum = parseInt(parts[2], 10);
@@ -259,9 +306,9 @@
             }
           });
         }
-      }, [isAuthenticated, activeTab, filteredTxs, stats]);
+      }, [isAuthenticated, activeTab, txs, selectedMonth, stats]);
 
-      // GIAO DỊCH
+      // GIAO DỊCH CRUD
       const handleOpenCreateTx = () => {
         setEditingTx(null);
         setTxForm({ type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0] });
@@ -327,7 +374,7 @@
         else setTxs(txs.filter(t => t.id !== id));
       };
 
-      // GÓI CƯỚC
+      // GÓI CƯỚC CRUD
       const handleOpenCreatePkg = () => {
         setEditingPkg(null);
         setPkgForm({ name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '' });
@@ -380,7 +427,7 @@
         else setPkgs(pkgs.filter(p => p.id !== id));
       };
 
-      // NỘP TIỀN NGÂN HÀNG
+      // NỘP TIỀN NGÂN HÀNG CRUD
       const handleOpenCreateBank = () => {
         setEditingBank(null);
         setBankForm({ amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: '' });
@@ -663,7 +710,12 @@
                               <div className="text-[11px] font-bold text-slate-800">{item.customer}</div>
                               <div className="text-[9px] text-slate-400">{item.phone}</div>
                             </div>
-                            <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-md">Còn {item.diffDays} ngày</span>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleCopyReminder(item)} title="Copy tin nhắn nhắc gia hạn" className="p-1 text-slate-500 hover:text-blue-600">
+                                <i className="fa-regular fa-copy text-xs"></i>
+                              </button>
+                              <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-md">Còn {item.diffDays} ngày</span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -673,18 +725,37 @@
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
                     {/* BẢNG GIAO DỊCH */}
                     <div className="md:col-span-7 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                      <div className="flex justify-between items-center">
+                      <div className="flex flex-wrap justify-between items-center gap-2">
                         <h3 className="font-bold text-xs text-slate-800">Giao dịch trong tháng {selectedMonth} ({filteredTxs.length})</h3>
-                        <button onClick={handleOpenCreateTx} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg">
-                          <i className="fa-solid fa-plus mr-1"></i> Thêm GD
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={handleExportExcel} className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg flex items-center gap-1 border border-emerald-200">
+                            <i className="fa-solid fa-file-excel"></i> Xuất Excel
+                          </button>
+                          <button onClick={handleOpenCreateTx} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg">
+                            <i className="fa-solid fa-plus mr-1"></i> Thêm GD
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Ô Tìm Kiếm Nhanh */}
+                      <div className="relative">
+                        <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input
+                          type="text"
+                          placeholder="Tìm nhanh theo tên khách, SĐT hoặc tên gói..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 bg-slate-50/50"
+                        />
+                      </div>
+
                       <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left text-[11px] min-w-[500px]">
+                        <table className="w-full text-left text-[11px] min-w-[550px]">
                           <thead className="bg-slate-50 text-slate-400 border-b">
                             <tr>
                               <th className="p-2">Ngày GD</th>
                               <th className="p-2">Khách hàng</th>
+                              <th className="p-2">Liên hệ (Zalo/Gọi)</th>
                               <th className="p-2">Gói cước</th>
                               <th className="p-2">Số tiền</th>
                               <th className="p-2 text-center">Thao tác</th>
@@ -692,23 +763,39 @@
                           </thead>
                           <tbody className="divide-y divide-slate-100 font-medium">
                             {filteredTxs.map(t => (
-                              <tr key={t.id}>
-                                <td className="p-2 whitespace-nowrap">{t.startDate}</td>
+                              <tr key={t.id} className="hover:bg-slate-50/50">
+                                <td className="p-2 whitespace-nowrap text-slate-500">{t.startDate}</td>
                                 <td className="p-2 font-bold whitespace-nowrap">{t.customer}</td>
+                                <td className="p-2 whitespace-nowrap">
+                                  {t.phone ? (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-600 font-medium">{t.phone}</span>
+                                      <a href={`https://zalo.me/${t.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" title="Chat Zalo" className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-blue-600">
+                                        <i className="fa-solid fa-comment"></i>
+                                      </a>
+                                      <a href={`tel:${t.phone}`} title="Gọi điện" className="w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-emerald-600">
+                                        <i className="fa-solid fa-phone"></i>
+                                      </a>
+                                    </div>
+                                  ) : <span className="text-slate-300">--</span>}
+                                </td>
                                 <td className="p-2 text-blue-600 font-bold whitespace-nowrap">{t.packageName}</td>
                                 <td className="p-2 font-black whitespace-nowrap">{(t.amount || 0).toLocaleString()} đ</td>
                                 <td className="p-2 text-center whitespace-nowrap">
-                                  <button onClick={() => handleOpenEditTx(t)} className="p-1 px-2 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
+                                  <button onClick={() => handleCopyReminder(t)} title="Copy tin nhắn nhắc gia hạn" className="p-1 px-1.5 text-slate-500 hover:text-blue-600 mr-1 font-bold">
+                                    <i className="fa-regular fa-copy"></i>
+                                  </button>
+                                  <button onClick={() => handleOpenEditTx(t)} className="p-1 px-1.5 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
                                     <i className="fa-solid fa-pen-to-square"></i>
                                   </button>
-                                  <button onClick={() => handleDeleteTx(t.id)} className="p-1 px-2 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
+                                  <button onClick={() => handleDeleteTx(t.id)} className="p-1 px-1.5 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
                                     <i className="fa-solid fa-trash"></i>
                                   </button>
                                 </td>
                               </tr>
                             ))}
                             {filteredTxs.length === 0 && (
-                              <tr><td colSpan="5" className="p-3 text-center text-slate-400">Không có giao dịch nào trong tháng {selectedMonth}</td></tr>
+                              <tr><td colSpan="6" className="p-3 text-center text-slate-400">Không tìm thấy giao dịch phù hợp trong tháng {selectedMonth}</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -839,7 +926,7 @@
             </button>
           </div>
 
-          {/* MODAL TẠO / SỬA NỘP TIỀN NGÂN HÀNG */}
+          {/* MODAL NỘP TIỀN NGÂN HÀNG */}
           {showBankModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
               <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -891,7 +978,7 @@
             </div>
           )}
 
-          {/* MODAL TẠO / SỬA GÓI CƯỚC */}
+          {/* MODAL GÓI CƯỚC */}
           {showPkgModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
               <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -947,7 +1034,7 @@
             </div>
           )}
 
-          {/* MODAL TẠO / SỬA GIAO DỊCH */}
+          {/* MODAL GIAO DỊCH */}
           {showTxModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
               <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
