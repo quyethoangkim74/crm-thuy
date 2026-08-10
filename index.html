@@ -37,14 +37,12 @@
       const [pinInput, setPinInput] = useState('');
       const [pinError, setPinError] = useState('');
 
-      // State chọn tháng (YYYY-MM)
       const [selectedMonth, setSelectedMonth] = useState(() => {
         const now = new Date();
         const m = String(now.getMonth() + 1).padStart(2, '0');
         return `${now.getFullYear()}-${m}`;
       });
 
-      // Tab chuyển đổi: 'dashboard' hoặc 'packages'
       const [activeTab, setActiveTab] = useState('dashboard');
 
       const [txs, setTxs] = useState([]);
@@ -59,6 +57,7 @@
 
       const [editingTx, setEditingTx] = useState(null);
       const [editingPkg, setEditingPkg] = useState(null);
+      const [editingBank, setEditingBank] = useState(null);
 
       const [txForm, setTxForm] = useState({
         type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0]
@@ -118,7 +117,6 @@
         setIsAuthenticated(false);
       };
 
-      // LỌC DỮ LIỆU THEO THÁNG
       const filteredTxs = useMemo(() => {
         return txs.filter(t => t.startDate && t.startDate.startsWith(selectedMonth));
       }, [txs, selectedMonth]);
@@ -370,7 +368,24 @@
         else setPkgs(pkgs.filter(p => p.id !== id));
       };
 
-      // NỘP TIỀN
+      // NỘP TIỀN NGÂN HÀNG (TẠO / SỬA / XÓA)
+      const handleOpenCreateBank = () => {
+        setEditingBank(null);
+        setBankForm({ amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: '' });
+        setShowBankModal(true);
+      };
+
+      const handleOpenEditBank = (b) => {
+        setEditingBank(b);
+        setBankForm({
+          amount: b.amount || '',
+          bank: b.bank || 'MB Bank',
+          date: b.date || new Date().toISOString().split('T')[0],
+          note: b.note || ''
+        });
+        setShowBankModal(true);
+      };
+
       const handleSaveBank = async (e) => {
         e.preventDefault();
         const payload = {
@@ -380,14 +395,28 @@
           note: bankForm.note
         };
 
-        const { data, error } = await supabase.from('bank_logs').insert([payload]).select();
-        if (error) {
-          alert('Lỗi nộp tiền: ' + error.message);
-        } else if (data) {
-          setBankLogs([data[0], ...bankLogs]);
-          setShowBankModal(false);
-          setBankForm({ amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: '' });
+        if (editingBank) {
+          const { data, error } = await supabase.from('bank_logs').update(payload).eq('id', editingBank.id).select();
+          if (error) alert('Lỗi cập nhật nộp tiền: ' + error.message);
+          else if (data) {
+            setBankLogs(bankLogs.map(item => item.id === editingBank.id ? data[0] : item));
+            setShowBankModal(false);
+          }
+        } else {
+          const { data, error } = await supabase.from('bank_logs').insert([payload]).select();
+          if (error) alert('Lỗi nộp tiền: ' + error.message);
+          else if (data) {
+            setBankLogs([data[0], ...bankLogs]);
+            setShowBankModal(false);
+          }
         }
+      };
+
+      const handleDeleteBank = async (id) => {
+        if (!confirm('Bạn có chắc chắn muốn xóa lịch sử nộp tiền này?')) return;
+        const { error } = await supabase.from('bank_logs').delete().eq('id', id);
+        if (error) alert('Lỗi xóa bản ghi: ' + error.message);
+        else setBankLogs(bankLogs.filter(b => b.id !== id));
       };
 
       if (!isAuthenticated) {
@@ -484,7 +513,6 @@
                   <i className="fa-solid fa-right-from-bracket"></i>
                 </button>
                 
-                {/* BỘ CHỌN THÁNG */}
                 {activeTab === 'dashboard' && (
                   <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
                     <i className="fa-regular fa-calendar text-blue-600"></i>
@@ -577,7 +605,7 @@
                       </div>
                     </button>
 
-                    <button onClick={() => setShowBankModal(true)} className="bg-purple-600 active:bg-purple-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                    <button onClick={handleOpenCreateBank} className="bg-purple-600 active:bg-purple-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
                       <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-wallet"></i></div>
                       <div className="text-left overflow-hidden">
                         <div className="font-bold text-xs truncate">Nộp tiền NH</div>
@@ -632,7 +660,7 @@
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
                     {/* BẢNG GIAO DỊCH */}
-                    <div className="md:col-span-8 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                    <div className="md:col-span-7 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
                       <div className="flex justify-between items-center">
                         <h3 className="font-bold text-xs text-slate-800">Giao dịch trong tháng {selectedMonth} ({filteredTxs.length})</h3>
                         <button onClick={handleOpenCreateTx} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg">
@@ -640,12 +668,11 @@
                         </button>
                       </div>
                       <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left text-[11px] min-w-[550px]">
+                        <table className="w-full text-left text-[11px] min-w-[500px]">
                           <thead className="bg-slate-50 text-slate-400 border-b">
                             <tr>
                               <th className="p-2">Ngày GD</th>
                               <th className="p-2">Khách hàng</th>
-                              <th className="p-2">SĐT</th>
                               <th className="p-2">Gói cước</th>
                               <th className="p-2">Số tiền</th>
                               <th className="p-2 text-center">Thao tác</th>
@@ -656,7 +683,6 @@
                               <tr key={t.id}>
                                 <td className="p-2 whitespace-nowrap">{t.startDate}</td>
                                 <td className="p-2 font-bold whitespace-nowrap">{t.customer}</td>
-                                <td className="p-2 whitespace-nowrap">{t.phone}</td>
                                 <td className="p-2 text-blue-600 font-bold whitespace-nowrap">{t.packageName}</td>
                                 <td className="p-2 font-black whitespace-nowrap">{(t.amount || 0).toLocaleString()} đ</td>
                                 <td className="p-2 text-center whitespace-nowrap">
@@ -670,16 +696,21 @@
                               </tr>
                             ))}
                             {filteredTxs.length === 0 && (
-                              <tr><td colSpan="6" className="p-3 text-center text-slate-400">Không có giao dịch nào trong tháng {selectedMonth}</td></tr>
+                              <tr><td colSpan="5" className="p-3 text-center text-slate-400">Không có giao dịch nào trong tháng {selectedMonth}</td></tr>
                             )}
                           </tbody>
                         </table>
                       </div>
                     </div>
 
-                    {/* BẢNG LỊCH SỬ NỘP TIỀN */}
-                    <div className="md:col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                      <h3 className="font-bold text-xs text-slate-800">Nộp tiền NH tháng {selectedMonth}</h3>
+                    {/* BẢNG LỊCH SỬ NỘP TIỀN (ĐÃ THÊM NÚT SỬA/XÓA) */}
+                    <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-xs text-slate-800">Nộp tiền NH tháng {selectedMonth}</h3>
+                        <button onClick={handleOpenCreateBank} className="text-xs font-bold text-purple-600 hover:text-purple-800 bg-purple-50 px-2 py-0.5 rounded-lg">
+                          <i className="fa-solid fa-plus mr-1"></i> Nộp
+                        </button>
+                      </div>
                       <div className="overflow-x-auto custom-scrollbar">
                         <table className="w-full text-left text-[11px]">
                           <thead className="bg-slate-50 text-slate-400 border-b">
@@ -687,18 +718,27 @@
                               <th className="p-2">Ngày</th>
                               <th className="p-2">Số tiền</th>
                               <th className="p-2">Ngân hàng</th>
+                              <th className="p-2 text-center">Thao tác</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 font-medium">
                             {filteredBankLogs.map(item => (
-                              <tr key={item.id}>
+                              <tr key={item.id} className="hover:bg-slate-50/50">
                                 <td className="p-2 whitespace-nowrap">{item.date}</td>
                                 <td className="p-2 font-bold text-emerald-600 whitespace-nowrap">{item.amount.toLocaleString()} đ</td>
                                 <td className="p-2 text-slate-700 font-bold whitespace-nowrap">{item.bank}</td>
+                                <td className="p-2 text-center whitespace-nowrap">
+                                  <button onClick={() => handleOpenEditBank(item)} className="p-1 px-1.5 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
+                                    <i className="fa-solid fa-pen-to-square"></i>
+                                  </button>
+                                  <button onClick={() => handleDeleteBank(item.id)} className="p-1 px-1.5 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
+                                    <i className="fa-solid fa-trash"></i>
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                             {filteredBankLogs.length === 0 && (
-                              <tr><td colSpan="3" className="p-3 text-center text-slate-400">Chưa nộp tiền tháng này</td></tr>
+                              <tr><td colSpan="4" className="p-3 text-center text-slate-400">Chưa nộp tiền tháng này</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -708,7 +748,7 @@
                 </>
               )}
 
-              {/* TAB 2: QUẢN LÝ TÊN GÓI CƯỚC (RIÊNG BIỆT) */}
+              {/* TAB 2: QUẢN LÝ TÊN GÓI CƯỚC */}
               {activeTab === 'packages' && (
                 <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
                   <div className="flex justify-between items-center border-b pb-3">
@@ -786,6 +826,50 @@
               <span className="text-[10px] font-bold">Báo cáo</span>
             </button>
           </div>
+
+          {/* MODAL TẠO / SỬA NỘP TIỀN NGÂN HÀNG */}
+          {showBankModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900">
+                    <i className="fa-solid fa-building-columns text-purple-600 mr-2"></i>
+                    {editingBank ? 'Sửa Lịch Sử Nộp Tiền' : 'Nộp Tiền Ngân Hàng'}
+                  </h3>
+                  <button onClick={() => setShowBankModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+                </div>
+                <form onSubmit={handleSaveBank} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Số Tiền Nộp (đ)</label>
+                    <input required type="number" placeholder="5000000" value={bankForm.amount} onChange={e => setBankForm({...bankForm, amount: e.target.value})} className="w-full mt-1 border rounded-xl p-3 text-sm font-extrabold text-purple-700 outline-none border-purple-200 focus:border-purple-600" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Ngân Hàng</label>
+                      <select value={bankForm.bank} onChange={e => setBankForm({...bankForm, bank: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-medium bg-white">
+                        <option value="MB Bank">MB Bank</option>
+                        <option value="Vietcombank">Vietcombank</option>
+                        <option value="BIDV">BIDV</option>
+                        <option value="Agribank">Agribank</option>
+                        <option value="Vietinbank">Vietinbank</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Ngày Nộp</label>
+                      <input type="date" value={bankForm.date} onChange={e => setBankForm({...bankForm, date: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Ghi Chú</label>
+                    <input type="text" placeholder="Nộp doanh thu..." value={bankForm.note} onChange={e => setBankForm({...bankForm, note: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                  </div>
+                  <button type="submit" className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">
+                    {editingBank ? 'CẬP NHẬT NỘP TIỀN' : 'XÁC NHẬN NỘP TIỀN'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
 
           {/* MODAL TẠO / SỬA GÓI CƯỚC */}
           {showPkgModal && (
@@ -919,45 +1003,6 @@
                   <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs mt-2 transition">
                     {editingTx ? 'CẬP NHẬT GIAO DỊCH' : 'LƯU GIAO DỊCH LÊN SUPABASE'}
                   </button>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* MODAL NỘP TIỀN NGÂN HÀNG */}
-          {showBankModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <h3 className="text-sm font-black text-slate-900"><i className="fa-solid fa-building-columns text-purple-600 mr-2"></i>Nộp Tiền Ngân Hàng</h3>
-                  <button onClick={() => setShowBankModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
-                </div>
-                <form onSubmit={handleSaveBank} className="space-y-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Số Tiền Nộp (đ)</label>
-                    <input required type="number" placeholder="5000000" value={bankForm.amount} onChange={e => setBankForm({...bankForm, amount: e.target.value})} className="w-full mt-1 border rounded-xl p-3 text-sm font-extrabold text-purple-700 outline-none border-purple-200 focus:border-purple-600" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Ngân Hàng</label>
-                      <select value={bankForm.bank} onChange={e => setBankForm({...bankForm, bank: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-medium bg-white">
-                        <option value="MB Bank">MB Bank</option>
-                        <option value="Vietcombank">Vietcombank</option>
-                        <option value="BIDV">BIDV</option>
-                        <option value="Agribank">Agribank</option>
-                        <option value="Vietinbank">Vietinbank</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Ngày Nộp</label>
-                      <input type="date" value={bankForm.date} onChange={e => setBankForm({...bankForm, date: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Ghi Chú</label>
-                    <input type="text" placeholder="Nộp doanh thu..." value={bankForm.note} onChange={e => setBankForm({...bankForm, note: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
-                  </div>
-                  <button type="submit" className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">XÁC NHẬN NỘP TIỀN</button>
                 </form>
               </div>
             </div>
