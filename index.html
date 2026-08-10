@@ -131,14 +131,11 @@
         setIsAuthenticated(false);
       };
 
-      // Xử lý mở Zalo PC trực tiếp
       const handleOpenZaloPC = (phone) => {
         if (!phone) return;
         const cleanPhone = phone.replace(/\D/g, '');
-        // 1. Thử gọi trực tiếp app Zalo PC
         window.location.href = `zalo://chat?phone=${cleanPhone}`;
         
-        // 2. Dự phòng nếu Zalo PC chưa mở hoặc không phản hồi sau 1.2s thì chuyển qua Web
         const timer = setTimeout(() => {
           window.open(`https://zalo.me/${cleanPhone}`, '_blank');
         }, 1200);
@@ -146,7 +143,6 @@
         window.addEventListener('blur', () => clearTimeout(timer), { once: true });
       };
 
-      // Tìm kiếm và Lọc giao dịch
       const filteredTxs = useMemo(() => {
         return txs.filter(t => {
           const matchesMonth = t.startDate && t.startDate.startsWith(selectedMonth);
@@ -163,14 +159,12 @@
         return bankLogs.filter(b => b.date && b.date.startsWith(selectedMonth));
       }, [bankLogs, selectedMonth]);
 
-      // Copy tin nhắn gia hạn mẫu
       const handleCopyReminder = (item) => {
         const text = `VNPT xin thông báo: Gói cước ${item.packageName || 'dịch vụ'} của Quý khách (${item.customer}) sẽ hết hạn vào ngày ${item.expireDate || 'tới'}. Quý khách vui lòng liên hệ em để gia hạn tiếp tục sử dụng dịch vụ nhé!`;
         navigator.clipboard.writeText(text);
         alert(`Đã sao chép tin nhắn mẫu cho KH ${item.customer}!\n\nNội dung: "${text}"`);
       };
 
-      // Xuất Excel
       const handleExportExcel = () => {
         if (filteredTxs.length === 0) {
           alert('Không có dữ liệu giao dịch trong tháng này để xuất Excel!');
@@ -323,7 +317,6 @@
         }
       }, [isAuthenticated, activeTab, txs, selectedMonth, stats]);
 
-      // GIAO DỊCH CRUD
       const handleOpenCreateTx = () => {
         setEditingTx(null);
         setTxForm({ type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0] });
@@ -389,7 +382,6 @@
         else setTxs(txs.filter(t => t.id !== id));
       };
 
-      // GÓI CƯỚC CRUD
       const handleOpenCreatePkg = () => {
         setEditingPkg(null);
         setPkgForm({ name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '' });
@@ -442,7 +434,6 @@
         else setPkgs(pkgs.filter(p => p.id !== id));
       };
 
-      // NỘP TIỀN NGÂN HÀNG CRUD
       const handleOpenCreateBank = () => {
         setEditingBank(null);
         setBankForm({ amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: '' });
@@ -671,256 +662,192 @@
                       </div>
                     </button>
 
-                    <button onClick={handleOpenCreatePkg} className="bg-indigo-600 active:bg-indigo-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
-                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-box"></i></div>
+                    <button onClick={handleOpenCreateBank} className="bg-teal-600 active:bg-teal-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-building-columns"></i></div>
                       <div className="text-left overflow-hidden">
-                        <div className="font-bold text-xs truncate">Tạo gói cước</div>
-                        <div className="text-[9px] opacity-80 hidden md:block">Thêm vào hệ thống</div>
+                        <div className="font-bold text-xs truncate">Nộp Ngân hàng</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Ghi nhận dòng tiền</div>
                       </div>
                     </button>
 
-                    <button onClick={handleOpenCreateBank} className="bg-purple-600 active:bg-purple-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
-                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-wallet"></i></div>
+                    <button onClick={handleExportExcel} className="bg-emerald-600 active:bg-emerald-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-file-excel"></i></div>
                       <div className="text-left overflow-hidden">
-                        <div className="font-bold text-xs truncate">Nộp tiền NH</div>
-                        <div className="text-[9px] opacity-80 hidden md:block">Cập nhật số dư</div>
+                        <div className="font-bold text-xs truncate">Xuất Excel</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Tải báo cáo tháng</div>
                       </div>
                     </button>
 
-                    <button onClick={() => setShowReportModal(true)} className="bg-amber-500 active:bg-amber-600 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                    <button onClick={() => setShowReportModal(true)} className="bg-slate-800 active:bg-slate-900 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
                       <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-chart-pie"></i></div>
                       <div className="text-left overflow-hidden">
-                        <div className="font-bold text-xs truncate">Báo cáo DT</div>
-                        <div className="text-[9px] opacity-80 hidden md:block">Xem tổng hợp</div>
+                        <div className="font-bold text-xs truncate">Báo cáo tổng quan</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Biểu đồ & Phân tích</div>
                       </div>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
-                    <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                      <h3 className="font-bold text-xs text-slate-800">Doanh thu theo ngày ({selectedMonth})</h3>
-                      <div className="h-40 md:h-44 w-full relative"><canvas ref={barChartRef}></canvas></div>
-                    </div>
-
-                    <div className="md:col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                      <h3 className="font-bold text-xs text-slate-800">Tỷ lệ dịch vụ ({selectedMonth})</h3>
-                      <div className="flex items-center justify-around gap-2">
-                        <div className="w-28 h-28 md:w-32 md:h-36 relative flex items-center justify-center shrink-0">
-                          <canvas ref={doughnutChartRef}></canvas>
-                        </div>
-                        <div className="space-y-2 text-[10px]">
-                          <div><span className="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1.5"></span><span className="font-bold">SIM:</span> {stats.simRev.toLocaleString()}đ</div>
-                          <div><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span><span className="font-bold">Fiber:</span> {stats.fiberRev.toLocaleString()}đ</div>
-                          <div><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span><span className="font-bold">Gia hạn:</span> {stats.renewalRev.toLocaleString()}đ</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="md:col-span-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                      <h3 className="font-bold text-xs text-slate-800">Khách sắp đến hạn</h3>
-                      <div className="space-y-2 text-xs">
-                        {upcomingExpirations.map(item => (
-                          <div key={item.id} className="flex items-center justify-between border-b pb-1">
-                            <div>
-                              <div className="text-[11px] font-bold text-slate-800">{item.customer}</div>
-                              <div className="text-[9px] text-slate-400">{item.phone}</div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => handleCopyReminder(item)} title="Copy tin nhắn nhắc gia hạn" className="p-1 text-slate-500 hover:text-blue-600">
-                                <i className="fa-regular fa-copy text-xs"></i>
-                              </button>
-                              <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-md">Còn {item.diffDays} ngày</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
-                    {/* BẢNG GIAO DỊCH */}
-                    <div className="md:col-span-7 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                      <div className="flex flex-wrap justify-between items-center gap-2">
-                        <h3 className="font-bold text-xs text-slate-800">Giao dịch trong tháng {selectedMonth} ({filteredTxs.length})</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* DANH SÁCH GIAO DỊCH */}
+                    <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-3">
                         <div className="flex items-center gap-2">
-                          <button onClick={handleExportExcel} className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg flex items-center gap-1 border border-emerald-200">
-                            <i className="fa-solid fa-file-excel"></i> Xuất Excel
-                          </button>
-                          <button onClick={handleOpenCreateTx} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg">
-                            <i className="fa-solid fa-plus mr-1"></i> Thêm GD
-                          </button>
+                          <h3 className="font-bold text-slate-800 text-sm">Giao dịch tháng {selectedMonth}</h3>
+                          <span className="bg-blue-100 text-blue-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full">{filteredTxs.length}</span>
                         </div>
-                      </div>
-
-                      {/* Ô Tìm Kiếm Nhanh */}
-                      <div className="relative">
-                        <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
                         <input
                           type="text"
-                          placeholder="Tìm nhanh theo tên khách, SĐT hoặc tên gói..."
+                          placeholder="Tìm KH, SĐT, Gói..."
                           value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 bg-slate-50/50"
+                          onChange={e => setSearchQuery(e.target.value)}
+                          className="w-full sm:w-48 px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-blue-500 outline-none"
                         />
                       </div>
 
                       <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left text-[11px] min-w-[550px]">
-                          <thead className="bg-slate-50 text-slate-400 border-b">
-                            <tr>
-                              <th className="p-2">Ngày GD</th>
-                              <th className="p-2">Khách hàng</th>
-                              <th className="p-2">Liên hệ (Zalo/Gọi)</th>
-                              <th className="p-2">Gói cước</th>
-                              <th className="p-2">Số tiền</th>
-                              <th className="p-2 text-center">Thao tác</th>
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                              <th className="p-2.5 font-bold">Khách Hàng</th>
+                              <th className="p-2.5 font-bold">Gói Cước</th>
+                              <th className="p-2.5 font-bold text-right">Số Tiền</th>
+                              <th className="p-2.5 font-bold text-center">Thao tác</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 font-medium">
-                            {filteredTxs.map(t => (
-                              <tr key={t.id} className="hover:bg-slate-50/50">
-                                <td className="p-2 whitespace-nowrap text-slate-500">{t.startDate}</td>
-                                <td className="p-2 font-bold whitespace-nowrap">{t.customer}</td>
-                                <td className="p-2 whitespace-nowrap">
-                                  {t.phone ? (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-slate-600 font-medium">{t.phone}</span>
-                                      {/* NÚT ZALO MỞ THẲNG APP ZALO PC */}
-                                      <button 
-                                        type="button"
-                                        onClick={() => handleOpenZaloPC(t.phone)} 
-                                        title="Chat Zalo PC" 
-                                        className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-blue-600 transition"
-                                      >
-                                        <i className="fa-solid fa-comment"></i>
-                                      </button>
-                                      {/* NÚT GỌI ĐIỆN */}
-                                      <a href={`tel:${t.phone}`} title="Gọi điện" className="w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-emerald-600 transition">
-                                        <i className="fa-solid fa-phone"></i>
-                                      </a>
-                                    </div>
-                                  ) : <span className="text-slate-300">--</span>}
-                                </td>
-                                <td className="p-2 text-blue-600 font-bold whitespace-nowrap">{t.packageName}</td>
-                                <td className="p-2 font-black whitespace-nowrap">{(t.amount || 0).toLocaleString()} đ</td>
-                                <td className="p-2 text-center whitespace-nowrap">
-                                  <button onClick={() => handleCopyReminder(t)} title="Copy tin nhắn nhắc gia hạn" className="p-1 px-1.5 text-slate-500 hover:text-blue-600 mr-1 font-bold">
-                                    <i className="fa-regular fa-copy"></i>
-                                  </button>
-                                  <button onClick={() => handleOpenEditTx(t)} className="p-1 px-1.5 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
-                                    <i className="fa-solid fa-pen-to-square"></i>
-                                  </button>
-                                  <button onClick={() => handleDeleteTx(t.id)} className="p-1 px-1.5 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
-                                    <i className="fa-solid fa-trash"></i>
-                                  </button>
-                                </td>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredTxs.length === 0 ? (
+                              <tr>
+                                <td colSpan="4" className="text-center py-6 text-slate-400 font-medium">Chưa có giao dịch nào</td>
                               </tr>
-                            ))}
-                            {filteredTxs.length === 0 && (
-                              <tr><td colSpan="6" className="p-3 text-center text-slate-400">Không tìm thấy giao dịch phù hợp trong tháng {selectedMonth}</td></tr>
+                            ) : (
+                              filteredTxs.map(t => (
+                                <tr key={t.id} className="hover:bg-slate-50/80 transition">
+                                  <td className="p-2.5">
+                                    <div className="font-bold text-slate-900">{t.customer || 'Khách lẻ'}</div>
+                                    <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                      <span>{t.phone}</span>
+                                      {t.phone && (
+                                        <button onClick={() => handleOpenZaloPC(t.phone)} className="text-blue-600 hover:underline font-bold">
+                                          Zalo
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="p-2.5">
+                                    <span className="font-bold text-blue-600">{t.packageName}</span>
+                                    <div className="text-[10px] text-slate-400">{t.service} • {t.months}+{t.bonusMonths}T</div>
+                                  </td>
+                                  <td className="p-2.5 text-right font-black text-slate-800">
+                                    {Number(t.amount || 0).toLocaleString()} đ
+                                  </td>
+                                  <td className="p-2.5 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button onClick={() => handleCopyReminder(t)} className="text-slate-400 hover:text-blue-600 p-1" title="Nhắn gia hạn">
+                                        <i className="fa-regular fa-copy"></i>
+                                      </button>
+                                      <button onClick={() => handleOpenEditTx(t)} className="text-slate-400 hover:text-amber-600 p-1">
+                                        <i className="fa-solid fa-pen-to-square"></i>
+                                      </button>
+                                      <button onClick={() => handleDeleteTx(t.id)} className="text-slate-400 hover:text-rose-600 p-1">
+                                        <i className="fa-solid fa-trash-can"></i>
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
                             )}
                           </tbody>
                         </table>
                       </div>
                     </div>
 
-                    {/* BẢNG LỊCH SỬ NỘP TIỀN */}
-                    <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-bold text-xs text-slate-800">Nộp tiền NH tháng {selectedMonth}</h3>
-                        <button onClick={handleOpenCreateBank} className="text-xs font-bold text-purple-600 hover:text-purple-800 bg-purple-50 px-2 py-0.5 rounded-lg">
-                          <i className="fa-solid fa-plus mr-1"></i> Nộp
-                        </button>
+                    {/* LỊCH SỬ NỘP NGÂN HÀNG & SẮP HẾT HẠN */}
+                    <div className="space-y-4">
+                      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <h3 className="font-bold text-slate-800 text-sm">Sắp hết hạn gia hạn</h3>
+                          <i className="fa-solid fa-clock-rotate-left text-amber-500 text-xs"></i>
+                        </div>
+                        <div className="space-y-2">
+                          {upcomingExpirations.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-3">Không có gói sắp hết hạn</p>
+                          ) : (
+                            upcomingExpirations.map(u => (
+                              <div key={u.id} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                                <div>
+                                  <div className="font-bold text-slate-800">{u.customer} ({u.phone})</div>
+                                  <div className="text-[10px] text-slate-500">{u.packageName} • Hạn: {u.expireDate}</div>
+                                </div>
+                                <button onClick={() => handleCopyReminder(u)} className="bg-amber-500 text-white px-2 py-1 rounded-lg text-[10px] font-bold">
+                                  Gửi mẫu
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
-                      <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left text-[11px]">
-                          <thead className="bg-slate-50 text-slate-400 border-b">
-                            <tr>
-                              <th className="p-2">Ngày</th>
-                              <th className="p-2">Số tiền</th>
-                              <th className="p-2">Ngân hàng</th>
-                              <th className="p-2 text-center">Thao tác</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 font-medium">
-                            {filteredBankLogs.map(item => (
-                              <tr key={item.id} className="hover:bg-slate-50/50">
-                                <td className="p-2 whitespace-nowrap">{item.date}</td>
-                                <td className="p-2 font-bold text-emerald-600 whitespace-nowrap">{item.amount.toLocaleString()} đ</td>
-                                <td className="p-2 text-slate-700 font-bold whitespace-nowrap">{item.bank}</td>
-                                <td className="p-2 text-center whitespace-nowrap">
-                                  <button onClick={() => handleOpenEditBank(item)} className="p-1 px-1.5 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
-                                    <i className="fa-solid fa-pen-to-square"></i>
-                                  </button>
-                                  <button onClick={() => handleDeleteBank(item.id)} className="p-1 px-1.5 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
-                                    <i className="fa-solid fa-trash"></i>
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                            {filteredBankLogs.length === 0 && (
-                              <tr><td colSpan="4" className="p-3 text-center text-slate-400">Chưa nộp tiền tháng này</td></tr>
-                            )}
-                          </tbody>
-                        </table>
+
+                      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <h3 className="font-bold text-slate-800 text-sm">Lịch sử nộp ngân hàng</h3>
+                          <button onClick={handleOpenCreateBank} className="text-teal-600 hover:underline text-xs font-bold">+ Thêm</button>
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                          {filteredBankLogs.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-3">Chưa có lịch sử nộp tiền</p>
+                          ) : (
+                            filteredBankLogs.map(b => (
+                              <div key={b.id} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                                <div>
+                                  <div className="font-bold text-teal-700">{Number(b.amount).toLocaleString()} đ</div>
+                                  <div className="text-[10px] text-slate-400">{b.date} • {b.bank}</div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => handleOpenEditBank(b)} className="text-slate-400 hover:text-amber-600 p-1"><i className="fa-solid fa-pen-to-square"></i></button>
+                                  <button onClick={() => handleDeleteBank(b.id)} className="text-slate-400 hover:text-rose-600 p-1"><i className="fa-solid fa-trash-can"></i></button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </>
               )}
 
-              {/* TAB 2: QUẢN LÝ TÊN GÓI CƯỚC */}
+              {/* TAB 2: QUẢN LÝ GÓI CƯỚC */}
               {activeTab === 'packages' && (
-                <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-                  <div className="flex justify-between items-center border-b pb-3">
+                <div className="bg-white rounded-2xl border border-slate-200/80 p-4 md:p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b pb-4">
                     <div>
-                      <h3 className="font-bold text-sm text-slate-900"><i className="fa-solid fa-box text-indigo-600 mr-2"></i> Danh Sách Tên Gói Cước ({pkgs.length})</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">Quản lý các gói cước SIM, Fiber, MyTV được phép chọn khi lên giao dịch mới</p>
+                      <h3 className="font-bold text-slate-900 text-base">Danh mục Gói Cước mẫu</h3>
+                      <p className="text-xs text-slate-500">Quản lý cấu hình các gói cước chuẩn bị sẵn</p>
                     </div>
-                    <button onClick={handleOpenCreatePkg} className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3.5 py-2 rounded-xl shadow-md shadow-indigo-600/20 transition">
-                      <i className="fa-solid fa-plus mr-1.5"></i> Tạo Gói Mới
+                    <button onClick={handleOpenCreatePkg} className="bg-indigo-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 active:scale-95 transition">
+                      + Thêm gói cước
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left text-xs min-w-[600px]">
-                      <thead className="bg-slate-50 text-slate-400 border-b">
-                        <tr>
-                          <th className="p-3">Tên Gói</th>
-                          <th className="p-3">Dịch Vụ</th>
-                          <th className="p-3">Chu Kỳ Chuẩn</th>
-                          <th className="p-3">Khuyến Mãi</th>
-                          <th className="p-3">Giá Gói</th>
-                          <th className="p-3 text-center">Thao Tác</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium">
-                        {pkgs.map(p => (
-                          <tr key={p.id} className="hover:bg-slate-50/50">
-                            <td className="p-3 font-bold text-indigo-600 whitespace-nowrap">{p.name}</td>
-                            <td className="p-3 whitespace-nowrap">
-                              <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${p.service === 'SIM' ? 'bg-blue-50 text-blue-600' : p.service === 'Fiber' ? 'bg-purple-50 text-purple-600' : 'bg-amber-50 text-amber-600'}`}>
-                                {p.service}
-                              </span>
-                            </td>
-                            <td className="p-3 whitespace-nowrap">{p.months} tháng</td>
-                            <td className="p-3 whitespace-nowrap text-emerald-600 font-bold">{p.bonusMonths ? `+${p.bonusMonths} tháng` : 'Không'}</td>
-                            <td className="p-3 font-black text-slate-900 whitespace-nowrap">{(p.price || 0).toLocaleString()} đ</td>
-                            <td className="p-3 text-center whitespace-nowrap">
-                              <button onClick={() => handleOpenEditPkg(p)} className="p-1.5 px-2.5 text-blue-600 hover:bg-blue-50 rounded-lg mr-1 font-bold">
-                                <i className="fa-solid fa-pen-to-square mr-1"></i> Sửa
-                              </button>
-                              <button onClick={() => handleDeletePkg(p.id)} className="p-1.5 px-2.5 text-rose-600 hover:bg-rose-50 rounded-lg font-bold">
-                                <i className="fa-solid fa-trash mr-1"></i> Xóa
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                        {pkgs.length === 0 && (
-                          <tr><td colSpan="6" className="p-6 text-center text-slate-400 font-medium">Chưa có gói cước nào. Bấm "Tạo Gói Mới" để thêm!</td></tr>
-                        )}
-                      </tbody>
-                    </table>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {pkgs.length === 0 ? (
+                      <p className="col-span-full text-center py-8 text-slate-400 font-medium text-xs">Chưa có gói cước nào. Nhấn "+ Thêm gói cước" để tạo mới!</p>
+                    ) : (
+                      pkgs.map(p => (
+                        <div key={p.id} className="border border-slate-200 rounded-2xl p-4 space-y-2 relative bg-slate-50/50 hover:bg-white transition">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${p.service === 'SIM' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{p.service}</span>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleOpenEditPkg(p)} className="text-slate-400 hover:text-amber-600 p-1"><i className="fa-solid fa-pen-to-square"></i></button>
+                              <button onClick={() => handleDeletePkg(p.id)} className="text-slate-400 hover:text-rose-600 p-1"><i className="fa-solid fa-trash-can"></i></button>
+                            </div>
+                          </div>
+                          <h4 className="font-bold text-slate-900 text-sm">{p.name}</h4>
+                          <div className="text-xs font-black text-indigo-600">{Number(p.price).toLocaleString()} đ</div>
+                          <div className="text-[11px] text-slate-500">Chu kỳ: {p.months} tháng {p.bonusMonths > 0 ? `(+${p.bonusMonths}T KM)` : ''}</div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
@@ -928,72 +855,90 @@
             </main>
           </div>
 
-          {/* MENUBAR MOBILE */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around py-2 px-3 z-30 shadow-lg">
-            <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
-              <i className="fa-solid fa-table-cells-large text-base"></i>
-              <span className="text-[10px] font-bold">Trang chủ</span>
+          {/* TAB BAR DƯỚI CHO MOBILE */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex items-center justify-around py-2 z-30">
+            <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 text-[10px] font-bold ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
+              <i className="fa-solid fa-table-cells-large text-base"></i> Trang chủ
             </button>
-            <button onClick={() => setActiveTab('packages')} className={`flex flex-col items-center gap-1 ${activeTab === 'packages' ? 'text-indigo-600' : 'text-slate-400'}`}>
-              <i className="fa-solid fa-box text-base"></i>
-              <span className="text-[10px] font-bold">Tên Gói</span>
-            </button>
-            <button onClick={handleOpenCreateTx} className="flex flex-col items-center gap-1 text-slate-400">
-              <i className="fa-solid fa-circle-plus text-base text-blue-600"></i>
-              <span className="text-[10px] font-bold text-slate-700">Tạo GD</span>
-            </button>
-            <button onClick={() => setShowReportModal(true)} className="flex flex-col items-center gap-1 text-slate-400">
-              <i className="fa-solid fa-chart-pie text-base"></i>
-              <span className="text-[10px] font-bold">Báo cáo</span>
+            <button onClick={() => setActiveTab('packages')} className={`flex flex-col items-center gap-1 text-[10px] font-bold ${activeTab === 'packages' ? 'text-indigo-600' : 'text-slate-400'}`}>
+              <i className="fa-solid fa-box text-base"></i> Gói cước
             </button>
           </div>
 
-          {/* MODAL NỘP TIỀN NGÂN HÀNG */}
-          {showBankModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <h3 className="text-sm font-black text-slate-900">
-                    <i className="fa-solid fa-building-columns text-purple-600 mr-2"></i>
-                    {editingBank ? 'Sửa Lịch Sử Nộp Tiền' : 'Nộp Tiền Ngân Hàng'}
-                  </h3>
-                  <button onClick={() => setShowBankModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+          {/* MODAL GIAO DỊCH */}
+          {showTxModal && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 md:p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="font-bold text-slate-900 text-sm">{editingTx ? 'Sửa giao dịch' : 'Tạo giao dịch mới'}</h3>
+                  <button onClick={() => setShowTxModal(false)} className="text-slate-400 hover:text-slate-600 p-1"><i className="fa-solid fa-xmark"></i></button>
                 </div>
-                <form onSubmit={handleSaveBank} className="space-y-3">
+
+                <form onSubmit={handleSaveTx} className="space-y-3 text-xs">
                   <div>
-                    <label className="text-xs font-bold text-slate-600">Số Tiền Nộp (đ)</label>
-                    <input 
-                      required 
-                      type="text" 
-                      inputMode="numeric"
-                      placeholder="1.000.000" 
-                      value={bankForm.amount} 
-                      onChange={e => setBankForm({...bankForm, amount: formatCurrencyInput(e.target.value)})} 
-                      className="w-full mt-1 border rounded-xl p-3 text-sm font-extrabold text-purple-700 outline-none border-purple-200 focus:border-purple-600" 
-                    />
+                    <label className="block font-bold text-slate-700 mb-1">Loại giao dịch</label>
+                    <select value={txForm.type} onChange={e => setTxForm({...txForm, type: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium">
+                      <option value="Phát triển mới">Phát triển mới</option>
+                      <option value="Gia hạn">Gia hạn</option>
+                    </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Chọn gói cước mẫu</label>
+                    <select onChange={handleSelectPackage} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium">
+                      <option value="">-- Chọn gói cước sẵn có --</option>
+                      {pkgs.map(p => <option key={p.id} value={p.name}>{p.name} - {Number(p.price).toLocaleString()}đ</option>)}
+                      <option value="custom">-- Nhập tùy chỉnh --</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs font-bold text-slate-600">Ngân Hàng</label>
-                      <select value={bankForm.bank} onChange={e => setBankForm({...bankForm, bank: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-medium bg-white">
-                        <option value="MB Bank">MB Bank</option>
-                        <option value="Vietcombank">Vietcombank</option>
-                        <option value="BIDV">BIDV</option>
-                        <option value="Agribank">Agribank</option>
-                        <option value="Vietinbank">Vietinbank</option>
+                      <label className="block font-bold text-slate-700 mb-1">Dịch vụ</label>
+                      <select value={txForm.service} onChange={e => setTxForm({...txForm, service: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium">
+                        <option value="SIM">SIM</option>
+                        <option value="Fiber">Fiber (Internet)</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-600">Ngày Nộp</label>
-                      <input type="date" value={bankForm.date} onChange={e => setBankForm({...bankForm, date: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                      <label className="block font-bold text-slate-700 mb-1">Tên Gói Cước</label>
+                      <input type="text" required value={txForm.packageName} onChange={e => setTxForm({...txForm, packageName: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" placeholder="VD: VD149T" />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Ghi Chú</label>
-                    <input type="text" placeholder="Nộp doanh thu..." value={bankForm.note} onChange={e => setBankForm({...bankForm, note: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Tên Khách Hàng</label>
+                      <input type="text" required value={txForm.customer} onChange={e => setTxForm({...txForm, customer: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" placeholder="Nguyễn Văn A" />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Số điện thoại</label>
+                      <input type="text" value={txForm.phone} onChange={e => setTxForm({...txForm, phone: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" placeholder="0912345678" />
+                    </div>
                   </div>
-                  <button type="submit" className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">
-                    {editingBank ? 'CẬP NHẬT NỘP TIỀN' : 'XÁC NHẬN NỘP TIỀN'}
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Chu kỳ (T)</label>
+                      <input type="number" value={txForm.months} onChange={e => setTxForm({...txForm, months: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">KM (T)</label>
+                      <input type="number" value={txForm.bonusMonths} onChange={e => setTxForm({...txForm, bonusMonths: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Số tiền (đ)</label>
+                      <input type="text" required value={txForm.amount} onChange={e => setTxForm({...txForm, amount: formatCurrencyInput(e.target.value)})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-bold text-blue-600" placeholder="0" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Ngày bắt đầu</label>
+                    <input type="date" value={txForm.startDate} onChange={e => setTxForm({...txForm, startDate: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" />
+                  </div>
+
+                  <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-600/20 transition">
+                    LƯU GIAO DỊCH
                   </button>
                 </form>
               </div>
@@ -1002,199 +947,119 @@
 
           {/* MODAL GÓI CƯỚC */}
           {showPkgModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <h3 className="text-sm font-black text-slate-900">
-                    <i className="fa-solid fa-box text-indigo-600 mr-2"></i>
-                    {editingPkg ? 'Sửa Gói Cước' : 'Tạo Gói Cước Mới'}
-                  </h3>
-                  <button onClick={() => setShowPkgModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 md:p-6 max-w-sm w-full shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="font-bold text-slate-900 text-sm">{editingPkg ? 'Sửa gói cước' : 'Tạo gói cước mới'}</h3>
+                  <button onClick={() => setShowPkgModal(false)} className="text-slate-400 hover:text-slate-600 p-1"><i className="fa-solid fa-xmark"></i></button>
                 </div>
-                <form onSubmit={handleSavePkg} className="space-y-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Tên Gói Cước</label>
-                    <input required type="text" placeholder="VD: FClub, YOLO100" value={pkgForm.name} onChange={e => setPkgForm({...pkgForm, name: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-indigo-600" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Loại Dịch Vụ</label>
-                      <select value={pkgForm.service} onChange={e => setPkgForm({...pkgForm, service: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
-                        <option value="SIM">SIM Di Động</option>
-                        <option value="Fiber">Fiber Internet</option>
-                        <option value="MyTV">MyTV</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Giá Gói (đ)</label>
-                      <input 
-                        required 
-                        type="text" 
-                        inputMode="numeric"
-                        placeholder="900.000" 
-                        value={pkgForm.price} 
-                        onChange={e => setPkgForm({...pkgForm, price: formatCurrencyInput(e.target.value)})} 
-                        className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold" 
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Chu Kỳ (Tháng)</label>
-                      <input type="number" value={pkgForm.months} onChange={e => setPkgForm({...pkgForm, months: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-emerald-600">Tháng Khuyến Mãi</label>
-                      <input type="number" value={pkgForm.bonusMonths} onChange={e => setPkgForm({...pkgForm, bonusMonths: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
-                    </div>
-                  </div>
-                  <button type="submit" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">
-                    {editingPkg ? 'CẬP NHẬT GÓI CƯỚC' : 'LƯU GÓI CƯỚC VÀO SYSTEM'}
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
 
-          {/* MODAL GIAO DỊCH */}
-          {showTxModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <h3 className="text-sm font-black text-slate-900">
-                    {editingTx ? '✏️ Chỉnh Sửa Giao Dịch' : '➕ Thêm Giao Dịch Mới'}
-                  </h3>
-                  <button onClick={() => setShowTxModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
-                </div>
-                <form onSubmit={handleSaveTx} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Loại Dịch Vụ</label>
-                      <select value={txForm.service} onChange={e => setTxForm({...txForm, service: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
-                        <option value="SIM">SIM Di Động</option>
-                        <option value="Fiber">Fiber Internet</option>
-                        <option value="MyTV">MyTV</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Loại Giao Dịch</label>
-                      <select value={txForm.type} onChange={e => setTxForm({...txForm, type: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
-                        <option value="Phát triển mới">Phát triển mới</option>
-                        <option value="Gia hạn">Gia hạn</option>
-                      </select>
-                    </div>
+                <form onSubmit={handleSavePkg} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Tên gói cước</label>
+                    <input type="text" required value={pkgForm.name} onChange={e => setPkgForm({...pkgForm, name: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" placeholder="VD: YEK70" />
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold text-slate-600">Chọn Gói Cước Theo Danh Sách</label>
-                      <button type="button" onClick={handleOpenCreatePkg} className="text-[10px] font-bold text-indigo-600 hover:underline">+ Tạo gói mới</button>
-                    </div>
-                    <select onChange={handleSelectPackage} value={txForm.packageName} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-blue-600 bg-blue-50/50 border-blue-200">
-                      <option value="">-- Chọn gói cước có sẵn --</option>
-                      {pkgs.map(p => (
-                        <option key={p.id} value={p.name}>
-                          {p.name} ({p.service}) - {p.price ? p.price.toLocaleString() + 'đ' : ''} [{p.months}T + {p.bonusMonths}T KM]
-                        </option>
-                      ))}
-                      <option value="custom">✍️ Nhập gói cước khác...</option>
+                    <label className="block font-bold text-slate-700 mb-1">Loại dịch vụ</label>
+                    <select value={pkgForm.service} onChange={e => setPkgForm({...pkgForm, service: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium">
+                      <option value="SIM">SIM</option>
+                      <option value="Fiber">Fiber (Internet)</option>
                     </select>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Tên Gói Cước Hiển Thị</label>
-                    <input required type="text" placeholder="FCLUB_12T" value={txForm.packageName} onChange={e => setTxForm({...txForm, packageName: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-blue-600" />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs font-bold text-slate-600">Tên Khách Hàng</label>
-                      <input required type="text" placeholder="Nguyễn Văn A" value={txForm.customer} onChange={e => setTxForm({...txForm, customer: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                      <label className="block font-bold text-slate-700 mb-1">Số tháng</label>
+                      <input type="number" value={pkgForm.months} onChange={e => setPkgForm({...pkgForm, months: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-600">Số Điện Thoại</label>
-                      <input type="text" placeholder="0911721999" value={txForm.phone} onChange={e => setTxForm({...txForm, phone: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Chu kỳ (tháng)</label>
-                      <input type="number" value={txForm.months} onChange={e => setTxForm({...txForm, months: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-emerald-600">Tháng KM</label>
-                      <input type="number" value={txForm.bonusMonths} onChange={e => setTxForm({...txForm, bonusMonths: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-600">Số Tiền (đ)</label>
-                      <input 
-                        required 
-                        type="text" 
-                        inputMode="numeric"
-                        placeholder="1.000.000" 
-                        value={txForm.amount} 
-                        onChange={e => setTxForm({...txForm, amount: formatCurrencyInput(e.target.value)})} 
-                        className="w-full mt-1 border rounded-xl p-2 text-xs font-bold" 
-                      />
+                      <label className="block font-bold text-slate-700 mb-1">Tháng KM</label>
+                      <input type="number" value={pkgForm.bonusMonths} onChange={e => setPkgForm({...pkgForm, bonusMonths: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-600">Ngày Giao Dịch</label>
-                    <input type="date" value={txForm.startDate} onChange={e => setTxForm({...txForm, startDate: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                    <label className="block font-bold text-slate-700 mb-1">Giá bán (đ)</label>
+                    <input type="text" required value={pkgForm.price} onChange={e => setPkgForm({...pkgForm, price: formatCurrencyInput(e.target.value)})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-bold text-indigo-600" placeholder="0" />
                   </div>
 
-                  <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs mt-2 transition">
-                    {editingTx ? 'CẬP NHẬT GIAO DỊCH' : 'LƯU GIAO DỊCH LÊN SUPABASE'}
+                  <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-600/20 transition">
+                    LƯU GÓI CƯỚC
                   </button>
                 </form>
               </div>
             </div>
           )}
 
-          {/* MODAL BÁO CÁO DOANH THU */}
+          {/* MODAL NỘP NGÂN HÀNG */}
+          {showBankModal && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 md:p-6 max-w-sm w-full shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="font-bold text-slate-900 text-sm">{editingBank ? 'Sửa lịch sử nộp' : 'Tạo nộp ngân hàng'}</h3>
+                  <button onClick={() => setShowBankModal(false)} className="text-slate-400 hover:text-slate-600 p-1"><i className="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <form onSubmit={handleSaveBank} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Số tiền nộp (đ)</label>
+                    <input type="text" required value={bankForm.amount} onChange={e => setBankForm({...bankForm, amount: formatCurrencyInput(e.target.value)})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-bold text-teal-600 text-sm" placeholder="0" />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Ngân hàng</label>
+                    <input type="text" value={bankForm.bank} onChange={e => setBankForm({...bankForm, bank: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" placeholder="MB Bank, Vietinbank..." />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Ngày nộp</label>
+                    <input type="date" value={bankForm.date} onChange={e => setBankForm({...bankForm, date: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Ghi chú</label>
+                    <input type="text" value={bankForm.note} onChange={e => setBankForm({...bankForm, note: e.target.value})} className="w-full p-2.5 border border-slate-200 rounded-xl outline-none font-medium" placeholder="Nộp doanh thu tuần 1..." />
+                  </div>
+
+                  <button type="submit" className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-md shadow-teal-600/20 transition">
+                    XÁC NHẬN NỘP TIỀN
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL BÁO CÁO TỔNG QUAN */}
           {showReportModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-xl p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <h3 className="text-sm font-black text-slate-900"><i className="fa-solid fa-chart-pie text-amber-500 mr-2"></i> Báo Cáo Doanh Thu ({selectedMonth})</h3>
-                  <button onClick={() => setShowReportModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 md:p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="font-bold text-slate-900 text-sm">Báo cáo & Biểu đồ doanh thu - Tháng {selectedMonth}</h3>
+                  <button onClick={() => setShowReportModal(false)} className="text-slate-400 hover:text-slate-600 p-1"><i className="fa-solid fa-xmark"></i></button>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-slate-50 rounded-xl border">
-                    <span className="text-slate-500 block">Tổng doanh thu</span>
-                    <span className="text-sm md:text-base font-black text-blue-600">{stats.totalRev.toLocaleString()} đ</span>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col items-center">
+                    <h4 className="font-bold text-slate-700 text-xs mb-3">Tỷ trọng Doanh thu</h4>
+                    <div className="w-40 h-40">
+                      <canvas ref={doughnutChartRef}></canvas>
+                    </div>
                   </div>
-                  <div className="p-3 bg-slate-50 rounded-xl border">
-                    <span className="text-slate-500 block">Đã nộp ngân hàng</span>
-                    <span className="text-sm md:text-base font-black text-emerald-600">{stats.totalBankPaid.toLocaleString()} đ</span>
+
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col items-center">
+                    <h4 className="font-bold text-slate-700 text-xs mb-3">Doanh thu theo chu kỳ (Triệu đ)</h4>
+                    <div className="w-full h-40">
+                      <canvas ref={barChartRef}></canvas>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-2 text-xs">
-                  <div className="font-bold text-slate-700">Chi tiết theo loại dịch vụ:</div>
-                  <div className="flex justify-between p-2.5 bg-blue-50/50 rounded-xl border border-blue-100">
-                    <span>📱 SIM ({stats.simCount} GD)</span>
-                    <span className="font-bold">{stats.simRev.toLocaleString()} đ</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                    <span>🌐 Fiber ({stats.fiberCount} GD)</span>
-                    <span className="font-bold">{stats.fiberRev.toLocaleString()} đ</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 bg-amber-50/50 rounded-xl border border-amber-100">
-                    <span>🔄 Gia Hạn ({stats.renewalCount} GD)</span>
-                    <span className="font-bold">{stats.renewalRev.toLocaleString()} đ</span>
-                  </div>
+                <div className="text-right">
+                  <button onClick={() => setShowReportModal(false)} className="px-5 py-2 bg-slate-800 text-white font-bold rounded-xl text-xs">
+                    Đóng
+                  </button>
                 </div>
-
-                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex justify-between items-center text-xs">
-                  <span className="font-bold text-rose-800">Số tiền hiện giữ:</span>
-                  <span className="text-sm font-black text-rose-600">{stats.remaining.toLocaleString()} đ</span>
-                </div>
-
-                <button onClick={() => setShowReportModal(false)} className="w-full py-3 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white rounded-xl font-bold text-xs">ĐÓNG BÁO CÁO</button>
               </div>
             </div>
           )}
@@ -1203,7 +1068,8 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
   </script>
 </body>
 </html>
