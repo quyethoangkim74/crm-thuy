@@ -30,6 +30,18 @@
 
     const CORRECT_PIN = '1234';
 
+    // Hàm tiện ích format tiền tệ
+    const formatCurrencyInput = (value) => {
+      if (value === null || value === undefined || value === '') return '';
+      const rawValue = value.toString().replace(/\D/g, '');
+      return rawValue ? new Intl.NumberFormat('vi-VN').format(rawValue) : '';
+    };
+
+    const parseCurrencyInput = (value) => {
+      if (!value) return 0;
+      return Number(value.toString().replace(/\D/g, ''));
+    };
+
     function App() {
       const [isAuthenticated, setIsAuthenticated] = useState(() => {
         return localStorage.getItem('crm_authenticated') === 'true';
@@ -139,7 +151,7 @@
             service: foundPkg.service || prev.service,
             months: foundPkg.months || 12,
             bonusMonths: foundPkg.bonusMonths || 0,
-            amount: foundPkg.price || prev.amount
+            amount: formatCurrencyInput(foundPkg.price)
           }));
         } else {
           setTxForm(prev => ({ ...prev, packageName: selectedName }));
@@ -264,7 +276,7 @@
           packageName: t.packageName || '',
           months: t.months || 12,
           bonusMonths: t.bonusMonths || 0,
-          amount: t.amount || '',
+          amount: formatCurrencyInput(t.amount),
           customer: t.customer || '',
           phone: t.phone || '',
           startDate: t.startDate || new Date().toISOString().split('T')[0]
@@ -287,7 +299,7 @@
           packageName: txForm.packageName,
           months: Number(txForm.months),
           bonusMonths: Number(txForm.bonusMonths),
-          amount: Number(txForm.amount),
+          amount: parseCurrencyInput(txForm.amount),
           expireDate: expireDate
         };
 
@@ -329,7 +341,7 @@
           service: p.service || 'SIM',
           months: p.months || 12,
           bonusMonths: p.bonusMonths || 0,
-          price: p.price || ''
+          price: formatCurrencyInput(p.price)
         });
         setShowPkgModal(true);
       };
@@ -341,7 +353,7 @@
           service: pkgForm.service,
           months: Number(pkgForm.months),
           bonusMonths: Number(pkgForm.bonusMonths),
-          price: Number(pkgForm.price)
+          price: parseCurrencyInput(pkgForm.price)
         };
 
         if (editingPkg) {
@@ -368,7 +380,7 @@
         else setPkgs(pkgs.filter(p => p.id !== id));
       };
 
-      // NỘP TIỀN NGÂN HÀNG (TẠO / SỬA / XÓA)
+      // NỘP TIỀN NGÂN HÀNG
       const handleOpenCreateBank = () => {
         setEditingBank(null);
         setBankForm({ amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: '' });
@@ -378,7 +390,7 @@
       const handleOpenEditBank = (b) => {
         setEditingBank(b);
         setBankForm({
-          amount: b.amount || '',
+          amount: formatCurrencyInput(b.amount),
           bank: b.bank || 'MB Bank',
           date: b.date || new Date().toISOString().split('T')[0],
           note: b.note || ''
@@ -390,7 +402,7 @@
         e.preventDefault();
         const payload = {
           date: bankForm.date,
-          amount: Number(bankForm.amount),
+          amount: parseCurrencyInput(bankForm.amount),
           bank: bankForm.bank,
           note: bankForm.note
         };
@@ -703,7 +715,7 @@
                       </div>
                     </div>
 
-                    {/* BẢNG LỊCH SỬ NỘP TIỀN (ĐÃ THÊM NÚT SỬA/XÓA) */}
+                    {/* BẢNG LỊCH SỬ NỘP TIỀN */}
                     <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
                       <div className="flex justify-between items-center">
                         <h3 className="font-bold text-xs text-slate-800">Nộp tiền NH tháng {selectedMonth}</h3>
@@ -841,7 +853,15 @@
                 <form onSubmit={handleSaveBank} className="space-y-3">
                   <div>
                     <label className="text-xs font-bold text-slate-600">Số Tiền Nộp (đ)</label>
-                    <input required type="number" placeholder="5000000" value={bankForm.amount} onChange={e => setBankForm({...bankForm, amount: e.target.value})} className="w-full mt-1 border rounded-xl p-3 text-sm font-extrabold text-purple-700 outline-none border-purple-200 focus:border-purple-600" />
+                    <input 
+                      required 
+                      type="text" 
+                      inputMode="numeric"
+                      placeholder="1.000.000" 
+                      value={bankForm.amount} 
+                      onChange={e => setBankForm({...bankForm, amount: formatCurrencyInput(e.target.value)})} 
+                      className="w-full mt-1 border rounded-xl p-3 text-sm font-extrabold text-purple-700 outline-none border-purple-200 focus:border-purple-600" 
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -898,7 +918,15 @@
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-600">Giá Gói (đ)</label>
-                      <input required type="number" placeholder="900000" value={pkgForm.price} onChange={e => setPkgForm({...pkgForm, price: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold" />
+                      <input 
+                        required 
+                        type="text" 
+                        inputMode="numeric"
+                        placeholder="900.000" 
+                        value={pkgForm.price} 
+                        onChange={e => setPkgForm({...pkgForm, price: formatCurrencyInput(e.target.value)})} 
+                        className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold" 
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -991,7 +1019,15 @@
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-600">Số Tiền (đ)</label>
-                      <input required type="number" value={txForm.amount} onChange={e => setTxForm({...txForm, amount: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs font-bold" />
+                      <input 
+                        required 
+                        type="text" 
+                        inputMode="numeric"
+                        placeholder="1.000.000" 
+                        value={txForm.amount} 
+                        onChange={e => setTxForm({...txForm, amount: formatCurrencyInput(e.target.value)})} 
+                        className="w-full mt-1 border rounded-xl p-2 text-xs font-bold" 
+                      />
                     </div>
                   </div>
 
