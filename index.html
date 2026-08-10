@@ -1,1 +1,1210 @@
 
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>VNPT - CRM Bán Hàng & Quản Lý Giao Dịch</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Thư viện xuất file Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body class="text-slate-800 antialiased selection:bg-blue-500 selection:text-white pb-16 md:pb-0">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const SUPABASE_URL = 'https://txcxftivmmgwakcxrnmu.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4Y3hmdGl2bW1nd2FrY3hybm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyODIxNzUsImV4cCI6MjEwMTg1ODE3NX0.nCw8bgYSHE3Q49iGiqK6SuEjcYg5xs22Oa-2-EXqNnw';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const CORRECT_PIN = '1234';
+
+    const formatCurrencyInput = (value) => {
+      if (value === null || value === undefined || value === '') return '';
+      const rawValue = value.toString().replace(/\D/g, '');
+      return rawValue ? new Intl.NumberFormat('vi-VN').format(rawValue) : '';
+    };
+
+    const parseCurrencyInput = (value) => {
+      if (!value) return 0;
+      return Number(value.toString().replace(/\D/g, ''));
+    };
+
+    function App() {
+      const [isAuthenticated, setIsAuthenticated] = useState(() => {
+        return localStorage.getItem('crm_authenticated') === 'true';
+      });
+      const [pinInput, setPinInput] = useState('');
+      const [pinError, setPinError] = useState('');
+
+      const [selectedMonth, setSelectedMonth] = useState(() => {
+        const now = new Date();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        return `${now.getFullYear()}-${m}`;
+      });
+
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [searchQuery, setSearchQuery] = useState('');
+
+      const [txs, setTxs] = useState([]);
+      const [pkgs, setPkgs] = useState([]);
+      const [bankLogs, setBankLogs] = useState([]);
+      const [loading, setLoading] = useState(false);
+      
+      const [showTxModal, setShowTxModal] = useState(false);
+      const [showPkgModal, setShowPkgModal] = useState(false);
+      const [showBankModal, setShowBankModal] = useState(false);
+      const [showReportModal, setShowReportModal] = useState(false);
+
+      const [editingTx, setEditingTx] = useState(null);
+      const [editingPkg, setEditingPkg] = useState(null);
+      const [editingBank, setEditingBank] = useState(null);
+
+      const [txForm, setTxForm] = useState({
+        type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0]
+      });
+
+      const [pkgForm, setPkgForm] = useState({
+        name: '', service: 'SIM', months: 12, bonusMonths: 0, price: ''
+      });
+
+      const [bankForm, setBankForm] = useState({
+        amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: ''
+      });
+
+      const barChartRef = useRef(null);
+      const doughnutChartRef = useRef(null);
+      const barChartInstance = useRef(null);
+      const doughnutChartInstance = useRef(null);
+
+      useEffect(() => {
+        if (isAuthenticated) {
+          loadData();
+        }
+      }, [isAuthenticated]);
+
+      const loadData = async () => {
+        setLoading(true);
+        try {
+          const { data: txsData } = await supabase.from('transactions').select('*').order('id', { ascending: false });
+          if (txsData) setTxs(txsData);
+
+          const { data: pkgsData } = await supabase.from('packages').select('*').order('id', { ascending: false });
+          if (pkgsData) setPkgs(pkgsData);
+
+          const { data: bankData } = await supabase.from('bank_logs').select('*').order('id', { ascending: false });
+          if (bankData) setBankLogs(bankData);
+        } catch (err) {
+          console.error("Lỗi tải dữ liệu:", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handlePinSubmit = (e) => {
+        e.preventDefault();
+        if (pinInput === CORRECT_PIN) {
+          localStorage.setItem('crm_authenticated', 'true');
+          setIsAuthenticated(true);
+          setPinError('');
+        } else {
+          setPinError('Mã PIN không đúng. Vui lòng thử lại!');
+          setPinInput('');
+        }
+      };
+
+      const handleLogout = () => {
+        localStorage.removeItem('crm_authenticated');
+        setIsAuthenticated(false);
+      };
+
+      // Xử lý mở Zalo PC trực tiếp
+      const handleOpenZaloPC = (phone) => {
+        if (!phone) return;
+        const cleanPhone = phone.replace(/\D/g, '');
+        // 1. Thử gọi trực tiếp app Zalo PC
+        window.location.href = `zalo://chat?phone=${cleanPhone}`;
+        
+        // 2. Dự phòng nếu Zalo PC chưa mở hoặc không phản hồi sau 1.2s thì chuyển qua Web
+        const timer = setTimeout(() => {
+          window.open(`https://zalo.me/${cleanPhone}`, '_blank');
+        }, 1200);
+
+        window.addEventListener('blur', () => clearTimeout(timer), { once: true });
+      };
+
+      // Tìm kiếm và Lọc giao dịch
+      const filteredTxs = useMemo(() => {
+        return txs.filter(t => {
+          const matchesMonth = t.startDate && t.startDate.startsWith(selectedMonth);
+          const q = searchQuery.toLowerCase().trim();
+          const matchesSearch = !q || 
+            (t.customer && t.customer.toLowerCase().includes(q)) ||
+            (t.phone && t.phone.includes(q)) ||
+            (t.packageName && t.packageName.toLowerCase().includes(q));
+          return matchesMonth && matchesSearch;
+        });
+      }, [txs, selectedMonth, searchQuery]);
+
+      const filteredBankLogs = useMemo(() => {
+        return bankLogs.filter(b => b.date && b.date.startsWith(selectedMonth));
+      }, [bankLogs, selectedMonth]);
+
+      // Copy tin nhắn gia hạn mẫu
+      const handleCopyReminder = (item) => {
+        const text = `VNPT xin thông báo: Gói cước ${item.packageName || 'dịch vụ'} của Quý khách (${item.customer}) sẽ hết hạn vào ngày ${item.expireDate || 'tới'}. Quý khách vui lòng liên hệ em để gia hạn tiếp tục sử dụng dịch vụ nhé!`;
+        navigator.clipboard.writeText(text);
+        alert(`Đã sao chép tin nhắn mẫu cho KH ${item.customer}!\n\nNội dung: "${text}"`);
+      };
+
+      // Xuất Excel
+      const handleExportExcel = () => {
+        if (filteredTxs.length === 0) {
+          alert('Không có dữ liệu giao dịch trong tháng này để xuất Excel!');
+          return;
+        }
+
+        const dataToExport = filteredTxs.map((t, idx) => ({
+          'STT': idx + 1,
+          'Ngày GD': t.startDate,
+          'Khách Hàng': t.customer,
+          'Số Điện Thoại': t.phone,
+          'Dịch Vụ': t.service,
+          'Loại GD': t.type,
+          'Gói Cước': t.packageName,
+          'Chu Kỳ (Tháng)': t.months,
+          'Tháng KM': t.bonusMonths,
+          'Số Tiền (VNĐ)': t.amount,
+          'Ngày Hết Hạn': t.expireDate || ''
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, `GiaoDich_${selectedMonth}`);
+        XLSX.writeFile(workbook, `BaoCao_GiaoDich_VNPT_${selectedMonth}.xlsx`);
+      };
+
+      const handleSelectPackage = (e) => {
+        const selectedName = e.target.value;
+        if (selectedName === 'custom') {
+          setTxForm(prev => ({ ...prev, packageName: '' }));
+          return;
+        }
+        const foundPkg = pkgs.find(p => p.name === selectedName);
+        if (foundPkg) {
+          setTxForm(prev => ({
+            ...prev,
+            packageName: foundPkg.name,
+            service: foundPkg.service || prev.service,
+            months: foundPkg.months || 12,
+            bonusMonths: foundPkg.bonusMonths || 0,
+            amount: formatCurrencyInput(foundPkg.price)
+          }));
+        } else {
+          setTxForm(prev => ({ ...prev, packageName: selectedName }));
+        }
+      };
+
+      const stats = useMemo(() => {
+        const currentMonthTxs = txs.filter(t => t.startDate && t.startDate.startsWith(selectedMonth));
+        const simTxs = currentMonthTxs.filter(t => t.service === 'SIM');
+        const fiberTxs = currentMonthTxs.filter(t => t.service === 'Fiber');
+        const renewalTxs = currentMonthTxs.filter(t => t.type === 'Gia hạn');
+
+        const totalRev = currentMonthTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        const simRev = simTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        const fiberRev = fiberTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        const renewalRev = renewalTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+        const totalBankPaid = filteredBankLogs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        const remaining = totalRev - totalBankPaid;
+
+        return {
+          totalRev,
+          simCount: simTxs.length,
+          simRev,
+          fiberCount: fiberTxs.length,
+          fiberRev,
+          renewalCount: renewalTxs.length,
+          renewalRev,
+          totalBankPaid,
+          remaining: remaining > 0 ? remaining : 0
+        };
+      }, [txs, filteredBankLogs, selectedMonth]);
+
+      const upcomingExpirations = useMemo(() => {
+        const today = new Date();
+        return txs.map(t => {
+          if (!t.expireDate) return null;
+          const exp = new Date(t.expireDate);
+          const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+          return { ...t, diffDays };
+        }).filter(t => t && t.diffDays >= 0)
+          .sort((a, b) => a.diffDays - b.diffDays)
+          .slice(0, 4);
+      }, [txs]);
+
+      useEffect(() => {
+        if (!isAuthenticated || activeTab !== 'dashboard') return;
+
+        if (barChartRef.current) {
+          if (barChartInstance.current) barChartInstance.current.destroy();
+          
+          const daysMap = {};
+          const currentMonthTxs = txs.filter(t => t.startDate && t.startDate.startsWith(selectedMonth));
+          currentMonthTxs.forEach(t => {
+            if (t.startDate) {
+              const parts = t.startDate.split('-');
+              const dayNum = parseInt(parts[2], 10);
+              daysMap[dayNum] = (daysMap[dayNum] || 0) + (Number(t.amount) || 0);
+            }
+          });
+
+          const labels = ['01', '04', '07', '10', '13', '16', '19', '22', '25', '28', '31'];
+          const dataPoints = labels.map(day => ((daysMap[parseInt(day, 10)] || 0) / 1000000));
+
+          const ctx = barChartRef.current.getContext('2d');
+          barChartInstance.current = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: labels,
+              datasets: [{
+                data: dataPoints,
+                backgroundColor: '#2563eb',
+                borderRadius: 4,
+                barThickness: 8
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: { grid: { color: '#f1f5f9' }, ticks: { callback: v => v + 'M', font: { size: 9 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+              }
+            }
+          });
+        }
+
+        if (doughnutChartRef.current) {
+          if (doughnutChartInstance.current) doughnutChartInstance.current.destroy();
+          const ctx = doughnutChartRef.current.getContext('2d');
+          doughnutChartInstance.current = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+              labels: ['SIM mới', 'Fiber mới', 'Gia hạn'],
+              datasets: [{
+                data: [stats.simRev || 1, stats.fiberRev || 1, stats.renewalRev || 1],
+                backgroundColor: ['#2563eb', '#10b981', '#f59e0b'],
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: '70%',
+              plugins: { legend: { display: false } }
+            }
+          });
+        }
+      }, [isAuthenticated, activeTab, txs, selectedMonth, stats]);
+
+      // GIAO DỊCH CRUD
+      const handleOpenCreateTx = () => {
+        setEditingTx(null);
+        setTxForm({ type: 'Phát triển mới', service: 'SIM', packageName: '', months: 12, bonusMonths: 0, amount: '', customer: '', phone: '', startDate: new Date().toISOString().split('T')[0] });
+        setShowTxModal(true);
+      };
+
+      const handleOpenEditTx = (t) => {
+        setEditingTx(t);
+        setTxForm({
+          type: t.type || 'Phát triển mới',
+          service: t.service || 'SIM',
+          packageName: t.packageName || '',
+          months: t.months || 12,
+          bonusMonths: t.bonusMonths || 0,
+          amount: formatCurrencyInput(t.amount),
+          customer: t.customer || '',
+          phone: t.phone || '',
+          startDate: t.startDate || new Date().toISOString().split('T')[0]
+        });
+        setShowTxModal(true);
+      };
+
+      const handleSaveTx = async (e) => {
+        e.preventDefault();
+        const d = new Date(txForm.startDate);
+        d.setMonth(d.getMonth() + Number(txForm.months) + Number(txForm.bonusMonths));
+        const expireDate = d.toISOString().split('T')[0];
+
+        const payload = {
+          startDate: txForm.startDate,
+          type: txForm.type,
+          service: txForm.service,
+          customer: txForm.customer,
+          phone: txForm.phone,
+          packageName: txForm.packageName,
+          months: Number(txForm.months),
+          bonusMonths: Number(txForm.bonusMonths),
+          amount: parseCurrencyInput(txForm.amount),
+          expireDate: expireDate
+        };
+
+        if (editingTx) {
+          const { data, error } = await supabase.from('transactions').update(payload).eq('id', editingTx.id).select();
+          if (error) alert('Lỗi sửa giao dịch: ' + error.message);
+          else if (data) {
+            setTxs(txs.map(item => item.id === editingTx.id ? data[0] : item));
+            setShowTxModal(false);
+          }
+        } else {
+          const { data, error } = await supabase.from('transactions').insert([payload]).select();
+          if (error) alert('Lỗi tạo giao dịch: ' + error.message);
+          else if (data) {
+            setTxs([data[0], ...txs]);
+            setShowTxModal(false);
+          }
+        }
+      };
+
+      const handleDeleteTx = async (id) => {
+        if (!confirm('Bạn có chắc chắn muốn xóa giao dịch này?')) return;
+        const { error } = await supabase.from('transactions').delete().eq('id', id);
+        if (error) alert('Lỗi xóa giao dịch: ' + error.message);
+        else setTxs(txs.filter(t => t.id !== id));
+      };
+
+      // GÓI CƯỚC CRUD
+      const handleOpenCreatePkg = () => {
+        setEditingPkg(null);
+        setPkgForm({ name: '', service: 'SIM', months: 12, bonusMonths: 0, price: '' });
+        setShowPkgModal(true);
+      };
+
+      const handleOpenEditPkg = (p) => {
+        setEditingPkg(p);
+        setPkgForm({
+          name: p.name || '',
+          service: p.service || 'SIM',
+          months: p.months || 12,
+          bonusMonths: p.bonusMonths || 0,
+          price: formatCurrencyInput(p.price)
+        });
+        setShowPkgModal(true);
+      };
+
+      const handleSavePkg = async (e) => {
+        e.preventDefault();
+        const payload = {
+          name: pkgForm.name,
+          service: pkgForm.service,
+          months: Number(pkgForm.months),
+          bonusMonths: Number(pkgForm.bonusMonths),
+          price: parseCurrencyInput(pkgForm.price)
+        };
+
+        if (editingPkg) {
+          const { data, error } = await supabase.from('packages').update(payload).eq('id', editingPkg.id).select();
+          if (error) alert('Lỗi cập nhật gói cước: ' + error.message);
+          else if (data) {
+            setPkgs(pkgs.map(item => item.id === editingPkg.id ? data[0] : item));
+            setShowPkgModal(false);
+          }
+        } else {
+          const { data, error } = await supabase.from('packages').insert([payload]).select();
+          if (error) alert('Lỗi tạo gói cước: ' + error.message);
+          else if (data) {
+            setPkgs([data[0], ...pkgs]);
+            setShowPkgModal(false);
+          }
+        }
+      };
+
+      const handleDeletePkg = async (id) => {
+        if (!confirm('Bạn có chắc chắn muốn xóa gói cước này?')) return;
+        const { error } = await supabase.from('packages').delete().eq('id', id);
+        if (error) alert('Lỗi xóa gói cước: ' + error.message);
+        else setPkgs(pkgs.filter(p => p.id !== id));
+      };
+
+      // NỘP TIỀN NGÂN HÀNG CRUD
+      const handleOpenCreateBank = () => {
+        setEditingBank(null);
+        setBankForm({ amount: '', bank: 'MB Bank', date: new Date().toISOString().split('T')[0], note: '' });
+        setShowBankModal(true);
+      };
+
+      const handleOpenEditBank = (b) => {
+        setEditingBank(b);
+        setBankForm({
+          amount: formatCurrencyInput(b.amount),
+          bank: b.bank || 'MB Bank',
+          date: b.date || new Date().toISOString().split('T')[0],
+          note: b.note || ''
+        });
+        setShowBankModal(true);
+      };
+
+      const handleSaveBank = async (e) => {
+        e.preventDefault();
+        const payload = {
+          date: bankForm.date,
+          amount: parseCurrencyInput(bankForm.amount),
+          bank: bankForm.bank,
+          note: bankForm.note
+        };
+
+        if (editingBank) {
+          const { data, error } = await supabase.from('bank_logs').update(payload).eq('id', editingBank.id).select();
+          if (error) alert('Lỗi cập nhật nộp tiền: ' + error.message);
+          else if (data) {
+            setBankLogs(bankLogs.map(item => item.id === editingBank.id ? data[0] : item));
+            setShowBankModal(false);
+          }
+        } else {
+          const { data, error } = await supabase.from('bank_logs').insert([payload]).select();
+          if (error) alert('Lỗi nộp tiền: ' + error.message);
+          else if (data) {
+            setBankLogs([data[0], ...bankLogs]);
+            setShowBankModal(false);
+          }
+        }
+      };
+
+      const handleDeleteBank = async (id) => {
+        if (!confirm('Bạn có chắc chắn muốn xóa lịch sử nộp tiền này?')) return;
+        const { error } = await supabase.from('bank_logs').delete().eq('id', id);
+        if (error) alert('Lỗi xóa bản ghi: ' + error.message);
+        else setBankLogs(bankLogs.filter(b => b.id !== id));
+      };
+
+      if (!isAuthenticated) {
+        return (
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl space-y-6 text-center">
+              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl mx-auto shadow-lg shadow-blue-500/30">
+                <i className="fa-solid fa-lock"></i>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">VNPT CRM</h2>
+                <p className="text-xs text-slate-500 mt-1">Nhập mã PIN để truy cập ứng dụng</p>
+              </div>
+
+              <form onSubmit={handlePinSubmit} className="space-y-4">
+                <input
+                  type="password"
+                  maxLength="6"
+                  placeholder="• • • •"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full text-center text-2xl font-black tracking-widest py-3 border-2 border-slate-200 rounded-2xl focus:border-blue-600 outline-none transition"
+                  autoFocus
+                />
+                {pinError && <p className="text-xs font-bold text-rose-500">{pinError}</p>}
+                <button
+                  type="submit"
+                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-600/30 transition active:scale-95"
+                >
+                  XÁC NHẬN MÃ PIN
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col md:flex-row min-h-screen bg-[#f3f4f6]">
+          {/* SIDEBAR BÊN TRÁI */}
+          <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col justify-between p-4 shrink-0 h-screen sticky top-0">
+            <div>
+              <div className="flex items-center gap-3 px-2 mb-6">
+                <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/30">
+                  <i className="fa-solid fa-paper-plane"></i>
+                </div>
+                <div>
+                  <h1 className="font-bold text-slate-900 text-sm leading-tight">CRM Bán hàng</h1>
+                  <p className="text-[10px] text-slate-400 font-medium">VNPT Telecom</p>
+                </div>
+              </div>
+
+              <nav className="space-y-1.5">
+                <button 
+                  onClick={() => setActiveTab('dashboard')} 
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-xs transition ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <i className="fa-solid fa-table-cells-large text-sm"></i> Trang chủ
+                </button>
+
+                <button 
+                  onClick={() => setActiveTab('packages')} 
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition ${activeTab === 'packages' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <i className="fa-solid fa-box text-sm"></i> Danh sách Gói Cước
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'packages' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}`}>{pkgs.length}</span>
+                </button>
+              </nav>
+            </div>
+
+            <div className="space-y-2 border-t pt-3">
+              <button onClick={handleLogout} className="w-full text-left text-xs font-bold text-rose-600 hover:bg-rose-50 p-2.5 rounded-xl transition flex items-center gap-2">
+                <i className="fa-solid fa-right-from-bracket"></i> Khóa ứng dụng
+              </button>
+            </div>
+          </aside>
+
+          {/* NỘI DUNG CHÍNH */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex md:hidden items-center justify-center text-white font-bold text-xs">
+                  <i className="fa-solid fa-paper-plane"></i>
+                </div>
+                <h2 className="text-base md:text-lg font-bold text-slate-800">
+                  {activeTab === 'dashboard' ? 'Trang chủ Dashboard' : 'Quản lý Gói Cước'}
+                </h2>
+              </div>
+              <div className="flex items-center gap-2 md:gap-4">
+                {loading && <span className="text-[10px] md:text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg"><i className="fa-solid fa-spin fa-spinner"></i></span>}
+                <button onClick={handleLogout} className="md:hidden text-rose-600 p-2 text-sm font-bold">
+                  <i className="fa-solid fa-right-from-bracket"></i>
+                </button>
+                
+                {activeTab === 'dashboard' && (
+                  <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+                    <i className="fa-regular fa-calendar text-blue-600"></i>
+                    <input
+                      type="month"
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="bg-transparent border-none outline-none text-xs font-bold cursor-pointer text-slate-800"
+                    />
+                  </div>
+                )}
+              </div>
+            </header>
+
+            <main className="p-3 md:p-6 space-y-4 md:space-y-5 overflow-y-auto custom-scrollbar">
+              
+              {/* TAB 1: TRANG CHỦ (DASHBOARD) */}
+              {activeTab === 'dashboard' && (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 md:gap-3">
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Tổng doanh thu</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-blue-600 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-wallet"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.totalRev.toLocaleString()} đ</span>
+                      <span className="text-[9px] font-bold text-blue-600 mt-1">Tháng {selectedMonth}</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">SIM mới</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-emerald-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-sim-card"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.simCount} TB</span>
+                      <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.simRev.toLocaleString()} đ</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Fiber mới</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-purple-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-wifi"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.fiberCount} HĐ</span>
+                      <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.fiberRev.toLocaleString()} đ</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Gia hạn</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-amber-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-rotate-right"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.renewalCount} GD</span>
+                      <span className="text-[10px] font-bold text-slate-600 mt-1">{stats.renewalRev.toLocaleString()} đ</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Đã nộp NH</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-teal-600 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-building-columns"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-slate-900 block">{stats.totalBankPaid.toLocaleString()} đ</span>
+                      <span className="text-[9px] text-slate-400 mt-1">{filteredBankLogs.length} lần nộp</span>
+                    </div>
+
+                    <div className="bg-white p-3 md:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">Chưa nộp</span>
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-rose-500 text-white rounded-lg md:rounded-xl flex items-center justify-center text-xs md:text-sm"><i className="fa-solid fa-money-bill-wave"></i></div>
+                      </div>
+                      <span className="text-xs md:text-sm font-black text-rose-600 block">{stats.remaining.toLocaleString()} đ</span>
+                      <span className="text-[9px] text-slate-400 mt-1">Còn giữ lại</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
+                    <button onClick={handleOpenCreateTx} className="bg-blue-600 active:bg-blue-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-plus"></i></div>
+                      <div className="text-left overflow-hidden">
+                        <div className="font-bold text-xs truncate">Tạo giao dịch</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Lưu dữ liệu</div>
+                      </div>
+                    </button>
+
+                    <button onClick={handleOpenCreatePkg} className="bg-indigo-600 active:bg-indigo-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-box"></i></div>
+                      <div className="text-left overflow-hidden">
+                        <div className="font-bold text-xs truncate">Tạo gói cước</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Thêm vào hệ thống</div>
+                      </div>
+                    </button>
+
+                    <button onClick={handleOpenCreateBank} className="bg-purple-600 active:bg-purple-700 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-wallet"></i></div>
+                      <div className="text-left overflow-hidden">
+                        <div className="font-bold text-xs truncate">Nộp tiền NH</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Cập nhật số dư</div>
+                      </div>
+                    </button>
+
+                    <button onClick={() => setShowReportModal(true)} className="bg-amber-500 active:bg-amber-600 text-white p-3 rounded-2xl flex items-center gap-2.5 shadow-sm transition">
+                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"><i className="fa-solid fa-chart-pie"></i></div>
+                      <div className="text-left overflow-hidden">
+                        <div className="font-bold text-xs truncate">Báo cáo DT</div>
+                        <div className="text-[9px] opacity-80 hidden md:block">Xem tổng hợp</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
+                    <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <h3 className="font-bold text-xs text-slate-800">Doanh thu theo ngày ({selectedMonth})</h3>
+                      <div className="h-40 md:h-44 w-full relative"><canvas ref={barChartRef}></canvas></div>
+                    </div>
+
+                    <div className="md:col-span-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <h3 className="font-bold text-xs text-slate-800">Tỷ lệ dịch vụ ({selectedMonth})</h3>
+                      <div className="flex items-center justify-around gap-2">
+                        <div className="w-28 h-28 md:w-32 md:h-36 relative flex items-center justify-center shrink-0">
+                          <canvas ref={doughnutChartRef}></canvas>
+                        </div>
+                        <div className="space-y-2 text-[10px]">
+                          <div><span className="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1.5"></span><span className="font-bold">SIM:</span> {stats.simRev.toLocaleString()}đ</div>
+                          <div><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span><span className="font-bold">Fiber:</span> {stats.fiberRev.toLocaleString()}đ</div>
+                          <div><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span><span className="font-bold">Gia hạn:</span> {stats.renewalRev.toLocaleString()}đ</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <h3 className="font-bold text-xs text-slate-800">Khách sắp đến hạn</h3>
+                      <div className="space-y-2 text-xs">
+                        {upcomingExpirations.map(item => (
+                          <div key={item.id} className="flex items-center justify-between border-b pb-1">
+                            <div>
+                              <div className="text-[11px] font-bold text-slate-800">{item.customer}</div>
+                              <div className="text-[9px] text-slate-400">{item.phone}</div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleCopyReminder(item)} title="Copy tin nhắn nhắc gia hạn" className="p-1 text-slate-500 hover:text-blue-600">
+                                <i className="fa-regular fa-copy text-xs"></i>
+                              </button>
+                              <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-md">Còn {item.diffDays} ngày</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
+                    {/* BẢNG GIAO DỊCH */}
+                    <div className="md:col-span-7 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <div className="flex flex-wrap justify-between items-center gap-2">
+                        <h3 className="font-bold text-xs text-slate-800">Giao dịch trong tháng {selectedMonth} ({filteredTxs.length})</h3>
+                        <div className="flex items-center gap-2">
+                          <button onClick={handleExportExcel} className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg flex items-center gap-1 border border-emerald-200">
+                            <i className="fa-solid fa-file-excel"></i> Xuất Excel
+                          </button>
+                          <button onClick={handleOpenCreateTx} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg">
+                            <i className="fa-solid fa-plus mr-1"></i> Thêm GD
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Ô Tìm Kiếm Nhanh */}
+                      <div className="relative">
+                        <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input
+                          type="text"
+                          placeholder="Tìm nhanh theo tên khách, SĐT hoặc tên gói..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 bg-slate-50/50"
+                        />
+                      </div>
+
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-[11px] min-w-[550px]">
+                          <thead className="bg-slate-50 text-slate-400 border-b">
+                            <tr>
+                              <th className="p-2">Ngày GD</th>
+                              <th className="p-2">Khách hàng</th>
+                              <th className="p-2">Liên hệ (Zalo/Gọi)</th>
+                              <th className="p-2">Gói cước</th>
+                              <th className="p-2">Số tiền</th>
+                              <th className="p-2 text-center">Thao tác</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium">
+                            {filteredTxs.map(t => (
+                              <tr key={t.id} className="hover:bg-slate-50/50">
+                                <td className="p-2 whitespace-nowrap text-slate-500">{t.startDate}</td>
+                                <td className="p-2 font-bold whitespace-nowrap">{t.customer}</td>
+                                <td className="p-2 whitespace-nowrap">
+                                  {t.phone ? (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-600 font-medium">{t.phone}</span>
+                                      {/* NÚT ZALO MỞ THẲNG APP ZALO PC */}
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleOpenZaloPC(t.phone)} 
+                                        title="Chat Zalo PC" 
+                                        className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-blue-600 transition"
+                                      >
+                                        <i className="fa-solid fa-comment"></i>
+                                      </button>
+                                      {/* NÚT GỌI ĐIỆN */}
+                                      <a href={`tel:${t.phone}`} title="Gọi điện" className="w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-emerald-600 transition">
+                                        <i className="fa-solid fa-phone"></i>
+                                      </a>
+                                    </div>
+                                  ) : <span className="text-slate-300">--</span>}
+                                </td>
+                                <td className="p-2 text-blue-600 font-bold whitespace-nowrap">{t.packageName}</td>
+                                <td className="p-2 font-black whitespace-nowrap">{(t.amount || 0).toLocaleString()} đ</td>
+                                <td className="p-2 text-center whitespace-nowrap">
+                                  <button onClick={() => handleCopyReminder(t)} title="Copy tin nhắn nhắc gia hạn" className="p-1 px-1.5 text-slate-500 hover:text-blue-600 mr-1 font-bold">
+                                    <i className="fa-regular fa-copy"></i>
+                                  </button>
+                                  <button onClick={() => handleOpenEditTx(t)} className="p-1 px-1.5 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
+                                    <i className="fa-solid fa-pen-to-square"></i>
+                                  </button>
+                                  <button onClick={() => handleDeleteTx(t.id)} className="p-1 px-1.5 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
+                                    <i className="fa-solid fa-trash"></i>
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {filteredTxs.length === 0 && (
+                              <tr><td colSpan="6" className="p-3 text-center text-slate-400">Không tìm thấy giao dịch phù hợp trong tháng {selectedMonth}</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* BẢNG LỊCH SỬ NỘP TIỀN */}
+                    <div className="md:col-span-5 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-xs text-slate-800">Nộp tiền NH tháng {selectedMonth}</h3>
+                        <button onClick={handleOpenCreateBank} className="text-xs font-bold text-purple-600 hover:text-purple-800 bg-purple-50 px-2 py-0.5 rounded-lg">
+                          <i className="fa-solid fa-plus mr-1"></i> Nộp
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-slate-50 text-slate-400 border-b">
+                            <tr>
+                              <th className="p-2">Ngày</th>
+                              <th className="p-2">Số tiền</th>
+                              <th className="p-2">Ngân hàng</th>
+                              <th className="p-2 text-center">Thao tác</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium">
+                            {filteredBankLogs.map(item => (
+                              <tr key={item.id} className="hover:bg-slate-50/50">
+                                <td className="p-2 whitespace-nowrap">{item.date}</td>
+                                <td className="p-2 font-bold text-emerald-600 whitespace-nowrap">{item.amount.toLocaleString()} đ</td>
+                                <td className="p-2 text-slate-700 font-bold whitespace-nowrap">{item.bank}</td>
+                                <td className="p-2 text-center whitespace-nowrap">
+                                  <button onClick={() => handleOpenEditBank(item)} className="p-1 px-1.5 text-blue-600 hover:bg-blue-50 rounded-md mr-1 font-bold">
+                                    <i className="fa-solid fa-pen-to-square"></i>
+                                  </button>
+                                  <button onClick={() => handleDeleteBank(item.id)} className="p-1 px-1.5 text-rose-600 hover:bg-rose-50 rounded-md font-bold">
+                                    <i className="fa-solid fa-trash"></i>
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {filteredBankLogs.length === 0 && (
+                              <tr><td colSpan="4" className="p-3 text-center text-slate-400">Chưa nộp tiền tháng này</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* TAB 2: QUẢN LÝ TÊN GÓI CƯỚC */}
+              {activeTab === 'packages' && (
+                <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center border-b pb-3">
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900"><i className="fa-solid fa-box text-indigo-600 mr-2"></i> Danh Sách Tên Gói Cước ({pkgs.length})</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Quản lý các gói cước SIM, Fiber, MyTV được phép chọn khi lên giao dịch mới</p>
+                    </div>
+                    <button onClick={handleOpenCreatePkg} className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3.5 py-2 rounded-xl shadow-md shadow-indigo-600/20 transition">
+                      <i className="fa-solid fa-plus mr-1.5"></i> Tạo Gói Mới
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left text-xs min-w-[600px]">
+                      <thead className="bg-slate-50 text-slate-400 border-b">
+                        <tr>
+                          <th className="p-3">Tên Gói</th>
+                          <th className="p-3">Dịch Vụ</th>
+                          <th className="p-3">Chu Kỳ Chuẩn</th>
+                          <th className="p-3">Khuyến Mãi</th>
+                          <th className="p-3">Giá Gói</th>
+                          <th className="p-3 text-center">Thao Tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {pkgs.map(p => (
+                          <tr key={p.id} className="hover:bg-slate-50/50">
+                            <td className="p-3 font-bold text-indigo-600 whitespace-nowrap">{p.name}</td>
+                            <td className="p-3 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${p.service === 'SIM' ? 'bg-blue-50 text-blue-600' : p.service === 'Fiber' ? 'bg-purple-50 text-purple-600' : 'bg-amber-50 text-amber-600'}`}>
+                                {p.service}
+                              </span>
+                            </td>
+                            <td className="p-3 whitespace-nowrap">{p.months} tháng</td>
+                            <td className="p-3 whitespace-nowrap text-emerald-600 font-bold">{p.bonusMonths ? `+${p.bonusMonths} tháng` : 'Không'}</td>
+                            <td className="p-3 font-black text-slate-900 whitespace-nowrap">{(p.price || 0).toLocaleString()} đ</td>
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <button onClick={() => handleOpenEditPkg(p)} className="p-1.5 px-2.5 text-blue-600 hover:bg-blue-50 rounded-lg mr-1 font-bold">
+                                <i className="fa-solid fa-pen-to-square mr-1"></i> Sửa
+                              </button>
+                              <button onClick={() => handleDeletePkg(p.id)} className="p-1.5 px-2.5 text-rose-600 hover:bg-rose-50 rounded-lg font-bold">
+                                <i className="fa-solid fa-trash mr-1"></i> Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {pkgs.length === 0 && (
+                          <tr><td colSpan="6" className="p-6 text-center text-slate-400 font-medium">Chưa có gói cước nào. Bấm "Tạo Gói Mới" để thêm!</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </main>
+          </div>
+
+          {/* MENUBAR MOBILE */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around py-2 px-3 z-30 shadow-lg">
+            <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
+              <i className="fa-solid fa-table-cells-large text-base"></i>
+              <span className="text-[10px] font-bold">Trang chủ</span>
+            </button>
+            <button onClick={() => setActiveTab('packages')} className={`flex flex-col items-center gap-1 ${activeTab === 'packages' ? 'text-indigo-600' : 'text-slate-400'}`}>
+              <i className="fa-solid fa-box text-base"></i>
+              <span className="text-[10px] font-bold">Tên Gói</span>
+            </button>
+            <button onClick={handleOpenCreateTx} className="flex flex-col items-center gap-1 text-slate-400">
+              <i className="fa-solid fa-circle-plus text-base text-blue-600"></i>
+              <span className="text-[10px] font-bold text-slate-700">Tạo GD</span>
+            </button>
+            <button onClick={() => setShowReportModal(true)} className="flex flex-col items-center gap-1 text-slate-400">
+              <i className="fa-solid fa-chart-pie text-base"></i>
+              <span className="text-[10px] font-bold">Báo cáo</span>
+            </button>
+          </div>
+
+          {/* MODAL NỘP TIỀN NGÂN HÀNG */}
+          {showBankModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900">
+                    <i className="fa-solid fa-building-columns text-purple-600 mr-2"></i>
+                    {editingBank ? 'Sửa Lịch Sử Nộp Tiền' : 'Nộp Tiền Ngân Hàng'}
+                  </h3>
+                  <button onClick={() => setShowBankModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+                </div>
+                <form onSubmit={handleSaveBank} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Số Tiền Nộp (đ)</label>
+                    <input 
+                      required 
+                      type="text" 
+                      inputMode="numeric"
+                      placeholder="1.000.000" 
+                      value={bankForm.amount} 
+                      onChange={e => setBankForm({...bankForm, amount: formatCurrencyInput(e.target.value)})} 
+                      className="w-full mt-1 border rounded-xl p-3 text-sm font-extrabold text-purple-700 outline-none border-purple-200 focus:border-purple-600" 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Ngân Hàng</label>
+                      <select value={bankForm.bank} onChange={e => setBankForm({...bankForm, bank: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-medium bg-white">
+                        <option value="MB Bank">MB Bank</option>
+                        <option value="Vietcombank">Vietcombank</option>
+                        <option value="BIDV">BIDV</option>
+                        <option value="Agribank">Agribank</option>
+                        <option value="Vietinbank">Vietinbank</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Ngày Nộp</label>
+                      <input type="date" value={bankForm.date} onChange={e => setBankForm({...bankForm, date: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Ghi Chú</label>
+                    <input type="text" placeholder="Nộp doanh thu..." value={bankForm.note} onChange={e => setBankForm({...bankForm, note: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                  </div>
+                  <button type="submit" className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">
+                    {editingBank ? 'CẬP NHẬT NỘP TIỀN' : 'XÁC NHẬN NỘP TIỀN'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL GÓI CƯỚC */}
+          {showPkgModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900">
+                    <i className="fa-solid fa-box text-indigo-600 mr-2"></i>
+                    {editingPkg ? 'Sửa Gói Cước' : 'Tạo Gói Cước Mới'}
+                  </h3>
+                  <button onClick={() => setShowPkgModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+                </div>
+                <form onSubmit={handleSavePkg} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Tên Gói Cước</label>
+                    <input required type="text" placeholder="VD: FClub, YOLO100" value={pkgForm.name} onChange={e => setPkgForm({...pkgForm, name: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-indigo-600" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Loại Dịch Vụ</label>
+                      <select value={pkgForm.service} onChange={e => setPkgForm({...pkgForm, service: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
+                        <option value="SIM">SIM Di Động</option>
+                        <option value="Fiber">Fiber Internet</option>
+                        <option value="MyTV">MyTV</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Giá Gói (đ)</label>
+                      <input 
+                        required 
+                        type="text" 
+                        inputMode="numeric"
+                        placeholder="900.000" 
+                        value={pkgForm.price} 
+                        onChange={e => setPkgForm({...pkgForm, price: formatCurrencyInput(e.target.value)})} 
+                        className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold" 
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Chu Kỳ (Tháng)</label>
+                      <input type="number" value={pkgForm.months} onChange={e => setPkgForm({...pkgForm, months: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-emerald-600">Tháng Khuyến Mãi</label>
+                      <input type="number" value={pkgForm.bonusMonths} onChange={e => setPkgForm({...pkgForm, bonusMonths: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                  </div>
+                  <button type="submit" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs transition">
+                    {editingPkg ? 'CẬP NHẬT GÓI CƯỚC' : 'LƯU GÓI CƯỚC VÀO SYSTEM'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL GIAO DỊCH */}
+          {showTxModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900">
+                    {editingTx ? '✏️ Chỉnh Sửa Giao Dịch' : '➕ Thêm Giao Dịch Mới'}
+                  </h3>
+                  <button onClick={() => setShowTxModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+                </div>
+                <form onSubmit={handleSaveTx} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Loại Dịch Vụ</label>
+                      <select value={txForm.service} onChange={e => setTxForm({...txForm, service: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
+                        <option value="SIM">SIM Di Động</option>
+                        <option value="Fiber">Fiber Internet</option>
+                        <option value="MyTV">MyTV</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Loại Giao Dịch</label>
+                      <select value={txForm.type} onChange={e => setTxForm({...txForm, type: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold bg-white">
+                        <option value="Phát triển mới">Phát triển mới</option>
+                        <option value="Gia hạn">Gia hạn</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-slate-600">Chọn Gói Cước Theo Danh Sách</label>
+                      <button type="button" onClick={handleOpenCreatePkg} className="text-[10px] font-bold text-indigo-600 hover:underline">+ Tạo gói mới</button>
+                    </div>
+                    <select onChange={handleSelectPackage} value={txForm.packageName} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-blue-600 bg-blue-50/50 border-blue-200">
+                      <option value="">-- Chọn gói cước có sẵn --</option>
+                      {pkgs.map(p => (
+                        <option key={p.id} value={p.name}>
+                          {p.name} ({p.service}) - {p.price ? p.price.toLocaleString() + 'đ' : ''} [{p.months}T + {p.bonusMonths}T KM]
+                        </option>
+                      ))}
+                      <option value="custom">✍️ Nhập gói cước khác...</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Tên Gói Cước Hiển Thị</label>
+                    <input required type="text" placeholder="FCLUB_12T" value={txForm.packageName} onChange={e => setTxForm({...txForm, packageName: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs font-bold text-blue-600" />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Tên Khách Hàng</label>
+                      <input required type="text" placeholder="Nguyễn Văn A" value={txForm.customer} onChange={e => setTxForm({...txForm, customer: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Số Điện Thoại</label>
+                      <input type="text" placeholder="0911721999" value={txForm.phone} onChange={e => setTxForm({...txForm, phone: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Chu kỳ (tháng)</label>
+                      <input type="number" value={txForm.months} onChange={e => setTxForm({...txForm, months: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-emerald-600">Tháng KM</label>
+                      <input type="number" value={txForm.bonusMonths} onChange={e => setTxForm({...txForm, bonusMonths: e.target.value})} className="w-full mt-1 border rounded-xl p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600">Số Tiền (đ)</label>
+                      <input 
+                        required 
+                        type="text" 
+                        inputMode="numeric"
+                        placeholder="1.000.000" 
+                        value={txForm.amount} 
+                        onChange={e => setTxForm({...txForm, amount: formatCurrencyInput(e.target.value)})} 
+                        className="w-full mt-1 border rounded-xl p-2 text-xs font-bold" 
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600">Ngày Giao Dịch</label>
+                    <input type="date" value={txForm.startDate} onChange={e => setTxForm({...txForm, startDate: e.target.value})} className="w-full mt-1 border rounded-xl p-2.5 text-xs" />
+                  </div>
+
+                  <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold shadow-lg text-xs mt-2 transition">
+                    {editingTx ? 'CẬP NHẬT GIAO DỊCH' : 'LƯU GIAO DỊCH LÊN SUPABASE'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL BÁO CÁO DOANH THU */}
+          {showReportModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+              <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-xl p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b pb-3">
+                  <h3 className="text-sm font-black text-slate-900"><i className="fa-solid fa-chart-pie text-amber-500 mr-2"></i> Báo Cáo Doanh Thu ({selectedMonth})</h3>
+                  <button onClick={() => setShowReportModal(false)} className="text-slate-400 font-bold hover:text-slate-600 text-lg">✕</button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl border">
+                    <span className="text-slate-500 block">Tổng doanh thu</span>
+                    <span className="text-sm md:text-base font-black text-blue-600">{stats.totalRev.toLocaleString()} đ</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border">
+                    <span className="text-slate-500 block">Đã nộp ngân hàng</span>
+                    <span className="text-sm md:text-base font-black text-emerald-600">{stats.totalBankPaid.toLocaleString()} đ</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="font-bold text-slate-700">Chi tiết theo loại dịch vụ:</div>
+                  <div className="flex justify-between p-2.5 bg-blue-50/50 rounded-xl border border-blue-100">
+                    <span>📱 SIM ({stats.simCount} GD)</span>
+                    <span className="font-bold">{stats.simRev.toLocaleString()} đ</span>
+                  </div>
+                  <div className="flex justify-between p-2.5 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                    <span>🌐 Fiber ({stats.fiberCount} GD)</span>
+                    <span className="font-bold">{stats.fiberRev.toLocaleString()} đ</span>
+                  </div>
+                  <div className="flex justify-between p-2.5 bg-amber-50/50 rounded-xl border border-amber-100">
+                    <span>🔄 Gia Hạn ({stats.renewalCount} GD)</span>
+                    <span className="font-bold">{stats.renewalRev.toLocaleString()} đ</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex justify-between items-center text-xs">
+                  <span className="font-bold text-rose-800">Số tiền hiện giữ:</span>
+                  <span className="text-sm font-black text-rose-600">{stats.remaining.toLocaleString()} đ</span>
+                </div>
+
+                <button onClick={() => setShowReportModal(false)} className="w-full py-3 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white rounded-xl font-bold text-xs">ĐÓNG BÁO CÁO</button>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
