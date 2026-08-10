@@ -131,6 +131,21 @@
         setIsAuthenticated(false);
       };
 
+      // Xử lý mở Zalo PC trực tiếp
+      const handleOpenZaloPC = (phone) => {
+        if (!phone) return;
+        const cleanPhone = phone.replace(/\D/g, '');
+        // 1. Thử gọi trực tiếp app Zalo PC
+        window.location.href = `zalo://chat?phone=${cleanPhone}`;
+        
+        // 2. Dự phòng nếu Zalo PC chưa mở hoặc không phản hồi sau 1.2s thì chuyển qua Web
+        const timer = setTimeout(() => {
+          window.open(`https://zalo.me/${cleanPhone}`, '_blank');
+        }, 1200);
+
+        window.addEventListener('blur', () => clearTimeout(timer), { once: true });
+      };
+
       // Tìm kiếm và Lọc giao dịch
       const filteredTxs = useMemo(() => {
         return txs.filter(t => {
@@ -770,10 +785,17 @@
                                   {t.phone ? (
                                     <div className="flex items-center gap-2">
                                       <span className="text-slate-600 font-medium">{t.phone}</span>
-                                      <a href={`https://zalo.me/${t.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" title="Chat Zalo" className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-blue-600">
+                                      {/* NÚT ZALO MỞ THẲNG APP ZALO PC */}
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleOpenZaloPC(t.phone)} 
+                                        title="Chat Zalo PC" 
+                                        className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-blue-600 transition"
+                                      >
                                         <i className="fa-solid fa-comment"></i>
-                                      </a>
-                                      <a href={`tel:${t.phone}`} title="Gọi điện" className="w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-emerald-600">
+                                      </button>
+                                      {/* NÚT GỌI ĐIỆN */}
+                                      <a href={`tel:${t.phone}`} title="Gọi điện" className="w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-emerald-600 transition">
                                         <i className="fa-solid fa-phone"></i>
                                       </a>
                                     </div>
